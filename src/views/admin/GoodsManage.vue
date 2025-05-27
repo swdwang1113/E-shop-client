@@ -661,7 +661,7 @@ onMounted(async () => {
 }
 
 .search-input {
-  width: 300px;
+  width: 600px;
 }
 
 .goods-info {

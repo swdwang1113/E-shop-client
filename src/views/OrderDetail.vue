@@ -4,8 +4,6 @@
       <div class="page-header">
         <h2>订单详情</h2>
         <div class="header-buttons">
-          <el-button @click="refreshOrderDetail" icon="RefreshRight" type="primary" plain>刷新</el-button>
-          <el-button @click="forceRequest" icon="Connection" type="warning" plain>强制请求</el-button>
           <el-button @click="goBack" icon="Back">返回</el-button>
         </div>
       </div>
@@ -149,10 +147,7 @@
       v-else-if="!loading"
       description="订单数据加载失败" 
     >
-      <p class="error-tip">可能是数据格式问题，请点击刷新按钮重试</p>
       <div class="empty-actions">
-        <el-button type="primary" @click="refreshOrderDetail" icon="RefreshRight">刷新数据</el-button>
-        <el-button type="warning" @click="forceRequest">强制请求</el-button>
         <el-button @click="goToOrderList">返回订单列表</el-button>
       </div>
     </el-empty>
@@ -226,8 +221,9 @@ const fetchOrderDetail = async () => {
   console.log('开始获取订单详情，ID:', orderId)
   
   try {
+    console.log('调用API前，请求参数:', orderId)
     const res = await getOrderDetail(orderId)
-    console.log('获取订单详情响应:', res)
+    console.log('获取订单详情响应原始数据:', JSON.stringify(res))
     
     if (res && res.data) {
       // 深拷贝防止影响原始数据
@@ -272,6 +268,13 @@ const fetchOrderDetail = async () => {
       
       orderInfo.value = orderData;
       console.log('处理后的订单详情数据:', orderInfo.value);
+      
+      // 添加更详细的调试信息
+      console.log('订单状态值:', orderInfo.value.status);
+      console.log('订单状态值类型:', typeof orderInfo.value.status);
+      console.log('订单状态文本:', getStatusText(orderInfo.value.status));
+      console.log('是否显示去评价按钮条件1 (status === 3):', orderInfo.value.status === 3);
+      console.log('是否显示去评价按钮条件2 (getStatusText === 已完成):', getStatusText(orderInfo.value.status) === '已完成');
     } else {
       console.error('获取订单详情失败: 没有数据');
       ElMessage.error('获取订单数据失败');
@@ -284,16 +287,6 @@ const fetchOrderDetail = async () => {
   } finally {
     loading.value = false;
   }
-}
-
-// 添加强制刷新功能
-const refreshOrderDetail = () => {
-  console.log('手动刷新订单详情')
-  loading.value = true
-  orderInfo.value = {}
-  setTimeout(() => {
-    fetchOrderDetail()
-  }, 100)
 }
 
 onMounted(() => {
@@ -316,6 +309,9 @@ watch([() => getOrderId()], ([newId], [oldId]) => {
 }, { immediate: true })
 
 const getStatusText = (status) => {
+  // 确保状态值是数字
+  const statusNum = Number(status);
+  
   const statusMap = {
     0: '待付款',
     1: '待发货',
@@ -325,7 +321,7 @@ const getStatusText = (status) => {
     5: '申请退款',
     6: '已退款'
   }
-  return statusMap[status] || '未知状态'
+  return statusMap[statusNum] || '未知状态'
 }
 
 const getStatusDesc = (status) => {
@@ -476,34 +472,6 @@ const deleteOrder = () => {
       console.error('删除订单失败:', error)
     }
   }).catch(() => {})
-}
-
-// 强制发送请求
-const forceRequest = async () => {
-  console.log('强制发送请求')
-  loading.value = true
-  orderInfo.value = {}
-  
-  try {
-    const orderId = getOrderId()
-    const timestamp = new Date().getTime()
-    console.log(`强制请求订单详情，ID: ${orderId}, 时间戳: ${timestamp}`)
-    
-    const res = await getOrderDetail(orderId)
-    console.log('强制请求响应数据:', res)
-    
-    if (res && res.data) {
-      orderInfo.value = res.data
-      ElMessage.success('数据刷新成功')
-    } else {
-      ElMessage.warning('响应数据格式不正确')
-    }
-  } catch (error) {
-    console.error('强制请求失败:', error)
-    ElMessage.error('请求失败: ' + error.message)
-  } finally {
-    loading.value = false
-  }
 }
 </script>
 

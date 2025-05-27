@@ -191,28 +191,28 @@
                 class="favorite-col"
               >
                 <el-card class="favorite-item" shadow="hover">
-                  <div class="favorite-img" @click="goToGoodsDetail(item.goods.id)">
-                    <img :src="item.goods.imageUrl || item.goods.image" :alt="item.goods.name">
+                  <div class="favorite-img" @click="goToGoodsDetail(item.goods?.id)">
+                    <img :src="item.goods?.imageUrl || item.goods?.image || ''" :alt="item.goods?.name || '商品图片'">
                   </div>
                   <div class="favorite-info">
-                    <div class="favorite-name" @click="goToGoodsDetail(item.goods.id)">
-                      {{ item.goods.name }}
+                    <div class="favorite-name" @click="goToGoodsDetail(item.goods?.id)">
+                      {{ item.goods?.name || '未命名商品' }}
                     </div>
                     <div class="favorite-price">
-                      ¥{{ item.goods.price.toFixed(2) }}
+                      ¥{{ (item.goods?.price) ? item.goods?.price.toFixed(2) : '0.00' }}
                     </div>
                     <div class="favorite-actions">
                       <el-button 
                         type="primary" 
                         size="small" 
-                        @click="goToGoodsDetail(item.goods.id)"
+                        @click="goToGoodsDetail(item.goods?.id)"
                       >
                         查看详情
                       </el-button>
                       <el-button 
                         type="danger" 
                         size="small" 
-                        @click="removeFavoriteItem(item.goodsId)"
+                        @click="removeFavoriteItem(item.goodsId || item.goods?.id)"
                       >
                         取消收藏
                       </el-button>
@@ -398,10 +398,40 @@ const fetchFavoriteList = async () => {
   favoriteLoading.value = true
   try {
     const res = await getFavoriteList()
-    favoriteList.value = res.data || []
+    console.log('收藏列表原始数据:', res)
+    
+    // 处理可能的不同数据格式
+    let favorites = []
+    if (res.data && Array.isArray(res.data)) {
+      favorites = res.data
+    } else if (res.data && res.data.list && Array.isArray(res.data.list)) {
+      favorites = res.data.list
+    } else if (Array.isArray(res)) {
+      favorites = res
+    }
+    
+    // 处理每个收藏项，确保数据格式一致
+    favoriteList.value = favorites.map(item => {
+      // 确保goods对象存在
+      if (!item.goods && item.goodsInfo) {
+        item.goods = item.goodsInfo
+      } else if (!item.goods) {
+        item.goods = {}
+      }
+      
+      // 确保必要的字段存在
+      if (!item.goodsId && item.goods && item.goods.id) {
+        item.goodsId = item.goods.id
+      }
+      
+      return item
+    })
+    
+    console.log('处理后的收藏列表:', favoriteList.value)
   } catch (error) {
     console.error('获取收藏列表失败:', error)
     ElMessage.error('获取收藏列表失败')
+    favoriteList.value = []
   } finally {
     favoriteLoading.value = false
   }
@@ -659,8 +689,22 @@ const handleLogout = async () => {
   }
 }
 
+// 跳转到商品详情
+const goToGoodsDetail = (goodsId) => {
+  if (!goodsId) {
+    ElMessage.warning('商品ID不存在，无法查看详情')
+    return
+  }
+  router.push(`/goods/${goodsId}`)
+}
+
 // 取消收藏
 const removeFavoriteItem = async (goodsId) => {
+  if (!goodsId) {
+    ElMessage.warning('商品ID不存在，无法取消收藏')
+    return
+  }
+  
   try {
     await ElMessageBox.confirm('确定要取消收藏该商品吗？', '提示', {
       confirmButtonText: '确定',
@@ -679,11 +723,6 @@ const removeFavoriteItem = async (goodsId) => {
       ElMessage.error('取消收藏失败: ' + (error.message || '未知错误'))
     }
   }
-}
-
-// 跳转到商品详情
-const goToGoodsDetail = (goodsId) => {
-  router.push(`/goods/${goodsId}`)
 }
 </script>
 
@@ -933,12 +972,17 @@ const goToGoodsDetail = (goodsId) => {
 }
 
 .favorite-img {
-  height: 200px;
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 创建1:1的宽高比 */
   overflow: hidden;
   cursor: pointer;
 }
 
 .favorite-img img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

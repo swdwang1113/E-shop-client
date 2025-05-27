@@ -514,7 +514,7 @@ onMounted(() => {
 }
 
 .search-input {
-  width: 250px;
+  width: 600px;
 }
 
 .user-info {

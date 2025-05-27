@@ -3,7 +3,7 @@
     <div class="container">
       <div class="logo">
         <a href="javascript:void(0)" @click="navigateTo('/')">
-          <h1>电商商城</h1>
+          <h1>购了么</h1>
         </a>
       </div>
       

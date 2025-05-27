@@ -93,7 +93,7 @@
             </div>
             <div class="goods-info">
               <div class="goods-name">{{ goods.name }}</div>
-              <div class="goods-price">¥{{ goods.price.toFixed(2) }}</div>
+              <div class="goods-price">¥{{ goods.price ? goods.price.toFixed(2) : '0.00' }}</div>
               <div class="goods-sales">已售 {{ goods.salesVolume || goods.sales || 0 }}</div>
             </div>
           </div>
@@ -417,11 +417,16 @@ const changeSortBy = (newSortBy) => {
 }
 
 .goods-img {
-  height: 200px;
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 创建1:1的宽高比 */
   overflow: hidden;
 }
 
 .goods-img img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

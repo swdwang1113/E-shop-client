@@ -110,7 +110,7 @@
                 </div>
                 <div class="goods-item-info">
                   <div class="goods-item-name">{{ item.name }}</div>
-                  <div class="goods-item-price">¥{{ item.price.toFixed(2) }}</div>
+                  <div class="goods-item-price">¥{{ item.price ? item.price.toFixed(2) : '0.00' }}</div>
                 </div>
               </div>
             </el-col>
@@ -129,7 +129,7 @@
           
           <div class="reviews-summary">
             <div class="average-rating">
-              <div class="rating-number">{{ averageRating.toFixed(1) }}</div>
+              <div class="rating-number">{{ averageRating ? averageRating.toFixed(1) : '0.0' }}</div>
               <div class="rating-stars">
                 <el-rate v-model="averageRating" disabled show-score text-color="#ff9900" />
               </div>
@@ -897,6 +897,24 @@ const submitReview = async () => {
       
       // 重新检查评价状态
       await checkUserReviewed()
+      
+      // 如果是从订单列表页跳转过来的，返回订单列表页并传递评价完成的信息
+      if (route.query.fromOrders === 'true') {
+        const orderId = route.query.orderId
+        const itemId = route.query.itemId
+        
+        // 返回订单列表页
+        router.push({
+          path: '/orders',
+          query: {
+            reviewed: 'true',
+            orderId: orderId,
+            goodsId: goodsId,
+            itemId: itemId,
+            timestamp: Date.now() // 添加时间戳确保URL唯一，避免缓存
+          }
+        })
+      }
     } else {
       ElMessage.error('评论提交失败: ' + (response.message || '未知错误'))
     }

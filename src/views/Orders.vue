@@ -7,12 +7,10 @@
         <el-select v-model="statusFilter" placeholder="订单状态" @change="fetchOrders">
           <el-option label="全部订单" value="" />
           <el-option label="待付款" :value="0" />
-          <el-option label="待发货" :value="1" />
+          <el-option label="已付款" :value="1" />
           <el-option label="已发货" :value="2" />
           <el-option label="已完成" :value="3" />
           <el-option label="已取消" :value="4" />
-          <el-option label="申请退款" :value="5" />
-          <el-option label="已退款" :value="6" />
         </el-select>
       </div>
     </div>
@@ -42,16 +40,28 @@
               class="goods-item" 
               v-for="item in order.orderItems" 
               :key="item.id" 
-              @click="goToGoodsDetail(item.goodsId)"
             >
-              <div class="goods-image">
+              <div class="goods-image" @click="goToGoodsDetail(item.goodsId)">
                 <el-image :src="item.goodsImage" :alt="item.goodsName" />
               </div>
               <div class="goods-info">
-                <div class="goods-name">{{ item.goodsName }}</div>
+                <div class="goods-name" @click="goToGoodsDetail(item.goodsId)">{{ item.goodsName }}</div>
                 <div class="goods-price-qty">
                   <span class="goods-price">¥{{ item.goodsPrice.toFixed(2) }}</span>
                   <span class="goods-qty">x{{ item.quantity }}</span>
+                </div>
+                
+                <!-- 每个商品单独的评价按钮 -->
+                <div class="goods-actions" v-if="order.status === 3">
+                  <el-button 
+                    :type="item.hasReviewed ? 'success' : 'primary'" 
+                    size="small"
+                    :disabled="item.hasReviewed"
+                    @click.stop="goToReview(order.id, item)"
+                  >
+                    <el-icon v-if="item.hasReviewed"><Check /></el-icon>
+                    {{ item.hasReviewed ? '已评价' : '去评价' }}
+                  </el-button>
                 </div>
               </div>
             </div>
@@ -90,20 +100,6 @@
               >
                 确认收货
               </el-button>
-              
-              <!-- 单商品订单使用ReviewButton组件 -->
-              <review-button
-                v-if="order.status === 3 && order.orderItems && order.orderItems.length === 1" 
-                :goods-id="order.orderItems[0].goodsId"
-                :order-id="order.id"
-              />
-              
-              <!-- 多商品订单使用OrderReviewButton组件 -->
-              <order-review-button
-                v-if="order.status === 3 && order.orderItems && order.orderItems.length > 1"
-                :order="order"
-                @show-review-options="showReviewOptions(order)"
-              />
               
               <el-button 
                 v-if="order.status === 3 || order.status === 4" 
@@ -170,59 +166,15 @@
       </span>
     </template>
   </el-dialog>
-  
-  <!-- 选择评价商品对话框 -->
-  <el-dialog
-    v-model="reviewDialogVisible"
-    title="选择评价商品"
-    width="500px"
-  >
-    <div class="review-dialog-content">
-      <p class="select-tip">该订单包含多件商品，请选择要评价的商品：</p>
-      
-      <div class="review-goods-list">
-        <div 
-          v-for="item in currentOrder?.orderItems" 
-          :key="item.id"
-          class="review-goods-item"
-        >
-          <div class="review-goods-image">
-            <el-image :src="item.goodsImage" :alt="item.goodsName" />
-          </div>
-          <div class="review-goods-info">
-            <div class="review-goods-name">{{ item.goodsName }}</div>
-            <div class="review-goods-price">¥{{ item.goodsPrice.toFixed(2) }}</div>
-          </div>
-          <div class="review-action-btn">
-            <el-button 
-              :type="isGoodsReviewed(item.goodsId, currentOrder.id) ? 'info' : 'primary'" 
-              :disabled="isGoodsReviewed(item.goodsId, currentOrder.id)"
-              size="small"
-              @click="goToReview(item.goodsId, currentOrder.id)"
-            >
-              {{ isGoodsReviewed(item.goodsId, currentOrder.id) ? '已评价' : '去评价' }}
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="reviewDialogVisible = false">取消</el-button>
-      </span>
-    </template>
-  </el-dialog>
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, onBeforeMount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check } from '@element-plus/icons-vue'
 import { getOrderList, cancelOrder as apiCancelOrder, payOrder as apiPayOrder, deleteOrder as apiDeleteOrder, confirmReceipt as apiConfirmReceipt } from '../api/order'
-import { checkReviewed } from '../api/review'
-import ReviewButton from '../components/ReviewButton.vue'
-import OrderReviewButton from '../components/OrderReviewButton.vue'
+import { checkReviewed } from '../api/review' // 导入检查评价状态的API
 
 const router = useRouter()
 const orderList = ref([])
@@ -231,6 +183,7 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const statusFilter = ref('')
+const reviewedItems = ref({}) // 存储已评价的商品ID
 
 // 支付相关
 const payDialogVisible = ref(false)
@@ -238,12 +191,34 @@ const payType = ref(1)
 const currentOrder = ref(null)
 const payLoading = ref(false)
 
-// 评价相关
-const reviewDialogVisible = ref(false)
-// 存储商品评价状态的Map，key为"goodsId-orderId"，value为是否已评价
-const reviewedStatusMap = reactive(new Map())
+onBeforeMount(() => {
+  // 从localStorage加载已评价的商品记录
+  const savedReviewedItems = localStorage.getItem('reviewedItems')
+  if (savedReviewedItems) {
+    try {
+      reviewedItems.value = JSON.parse(savedReviewedItems)
+    } catch (e) {
+      console.error('解析已评价商品记录失败:', e)
+      reviewedItems.value = {}
+    }
+  }
+})
 
 onMounted(() => {
+  console.log('Orders组件已挂载，检查URL参数')
+  
+  // 检查URL参数，看是否有评价完成的标记
+  const query = router.currentRoute.value.query
+  if (query.reviewed === 'true' && query.orderId && query.goodsId) {
+    console.log('检测到评价完成标记，更新状态:', query)
+    markItemAsReviewed(Number(query.orderId), Number(query.goodsId))
+    ElMessage.success('评价成功！')
+    
+    // 清除URL参数，避免刷新页面时重复处理
+    router.replace({ path: '/orders' })
+  }
+  
+  // 获取订单列表
   fetchOrders()
 })
 
@@ -267,22 +242,33 @@ const fetchOrders = async () => {
     if (res.data && res.data.list) {
       orderList.value = res.data.list || []
       total.value = res.data.total || 0
-      console.log('解析后的订单列表:', orderList.value)
+      
+      // 标记已评价的商品
+      orderList.value.forEach(order => {
+        if (order.orderItems && Array.isArray(order.orderItems)) {
+          order.orderItems.forEach(item => {
+            const reviewKey = `${order.id}_${item.goodsId}`
+            item.hasReviewed = !!reviewedItems.value[reviewKey]
+          })
+        }
+      })
+      
+      // 检查商品评价状态
+      await checkOrderItemsReviewStatus()
+      
+      console.log('处理后的订单列表:', orderList.value)
     } else {
       console.warn('订单数据结构不符合预期，尝试直接使用数据')
       if (Array.isArray(res.data)) {
         orderList.value = res.data
         total.value = res.data.length
+        console.log('直接使用数据数组:', orderList.value)
       } else {
         orderList.value = []
         total.value = 0
         console.error('无法解析订单数据:', res.data)
       }
     }
-    
-    // 检查已完成订单中商品的评价状态
-    await checkOrdersReviewStatus()
-    
   } catch (error) {
     console.error('获取订单列表失败:', error)
     orderList.value = []
@@ -311,9 +297,12 @@ const goToGoodsDetail = (goodsId) => {
 }
 
 const viewOrderDetail = (orderId) => {
+  console.log('查看订单详情，订单ID:', orderId)
+  // 使用Vue Router进行导航
   router.push({
     name: 'OrderDetail',
-    params: { id: orderId }
+    params: { id: orderId },
+    query: { _t: new Date().getTime() } // 添加时间戳确保刷新
   })
 }
 
@@ -327,25 +316,21 @@ const getTotalQuantity = (order) => {
 const getStatusText = (status) => {
   const statusMap = {
     0: '待付款',
-    1: '待发货',
+    1: '已付款',
     2: '已发货',
     3: '已完成',
-    4: '已取消',
-    5: '申请退款',
-    6: '已退款'
+    4: '已取消'
   }
   return statusMap[status] || '未知状态'
 }
 
 const getStatusType = (status) => {
   const typeMap = {
-    0: 'warning',   // 待付款
-    1: 'primary',   // 待发货
-    2: 'info',      // 已发货
-    3: 'success',   // 已完成
-    4: 'danger',    // 已取消
-    5: 'warning',   // 申请退款
-    6: 'info'       // 已退款
+    0: 'warning',
+    1: 'primary',
+    2: 'success',
+    3: 'success',
+    4: 'info'
   }
   return typeMap[status] || ''
 }
@@ -441,106 +426,70 @@ const deleteOrder = (orderId) => {
   }).catch(() => {})
 }
 
-// 显示评价选项
-const showReviewOptions = async (order) => {
-  // 如果整个订单已评价，则不做任何操作
-  if (isOrderReviewed(order)) {
-    ElMessage.info('该订单已完成评价')
+// 去评价
+const goToReview = (orderId, item) => {
+  console.log('去评价，订单ID:', orderId, '商品:', item)
+  
+  // 确保订单有商品
+  if (!item) {
+    ElMessage.warning('订单中没有商品可评价')
     return
   }
   
-  // 如果订单中只有一件商品，直接跳转到评价页面
-  if (order.orderItems && order.orderItems.length === 1) {
-    goToReview(order.orderItems[0].goodsId, order.id)
-    return
-  }
-  
-  // 如果有多件商品，显示选择对话框
-  currentOrder.value = order
-  
-  // 检查每个商品的评价状态
-  if (order.orderItems && Array.isArray(order.orderItems)) {
-    for (const item of order.orderItems) {
-      await checkGoodsReviewStatus(item.goodsId, order.id)
-    }
-  }
-  
-  reviewDialogVisible.value = true
-}
-
-// 检查商品评价状态
-const checkGoodsReviewStatus = async (goodsId, orderId) => {
-  const key = `${goodsId}-${orderId}`
-  
-  try {
-    console.log(`检查商品 ${goodsId} 在订单 ${orderId} 中的评价状态`)
-    const res = await checkReviewed(goodsId, orderId)
-    console.log(`检查结果:`, res)
-    
-    if (res.success && res.data === true) {
-      reviewedStatusMap.set(key, true)
-      console.log(`商品 ${goodsId} 已评价`)
-    } else {
-      reviewedStatusMap.set(key, false)
-      console.log(`商品 ${goodsId} 未评价`)
-    }
-  } catch (error) {
-    console.error(`检查商品 ${goodsId} 评价状态失败:`, error)
-    reviewedStatusMap.set(key, false)
-  }
-}
-
-// 判断商品是否已评价
-const isGoodsReviewed = (goodsId, orderId) => {
-  const key = `${goodsId}-${orderId}`
-  return reviewedStatusMap.get(key) === true
-}
-
-// 判断整个订单是否已评价（所有商品都已评价）
-const isOrderReviewed = (order) => {
-  if (!order || !order.orderItems || !Array.isArray(order.orderItems) || order.orderItems.length === 0) {
-    return false
-  }
-  
-  // 检查所有商品是否都已评价
-  return order.orderItems.every(item => {
-    const key = `${item.goodsId}-${order.id}`
-    return reviewedStatusMap.get(key) === true
-  })
-}
-
-// 跳转到评价页面
-const goToReview = (goodsId, orderId) => {
-  // 如果商品已评价，不做任何操作
-  if (isGoodsReviewed(goodsId, orderId)) {
-    ElMessage.info('该商品已完成评价')
-    return
-  }
-  
-  reviewDialogVisible.value = false
-  
-  // 跳转到商品详情页并打开评价表单
+  // 跳转到商品详情页并带上评价参数
   router.push({
-    path: `/goods/${goodsId}`,
+    path: `/goods/${item.goodsId}`,
     query: { 
       review: 'true',
-      orderId: orderId
+      orderId: orderId,
+      itemId: item.id,
+      fromOrders: 'true' // 标记来源，用于评价完成后返回
     }
   })
 }
 
-// 检查所有已完成订单中商品的评价状态
-const checkOrdersReviewStatus = async () => {
-  // 只检查已完成的订单
-  const completedOrders = orderList.value.filter(order => order.status === 3)
+// 标记商品为已评价
+const markItemAsReviewed = (orderId, goodsId) => {
+  const reviewKey = `${orderId}_${goodsId}`
+  reviewedItems.value[reviewKey] = true
   
-  for (const order of completedOrders) {
-    if (order.orderItems && Array.isArray(order.orderItems)) {
+  // 保存到localStorage
+  localStorage.setItem('reviewedItems', JSON.stringify(reviewedItems.value))
+  
+  // 更新UI
+  orderList.value.forEach(order => {
+    if (order.id === Number(orderId) && order.orderItems) {
+      const item = order.orderItems.find(i => i.goodsId === Number(goodsId))
+      if (item) {
+        item.hasReviewed = true
+      }
+    }
+  })
+}
+
+// 检查订单中商品的评价状态
+const checkOrderItemsReviewStatus = async () => {
+  for (const order of orderList.value) {
+    if (order.status === 3 && order.orderItems && Array.isArray(order.orderItems)) {
       for (const item of order.orderItems) {
-        await checkGoodsReviewStatus(item.goodsId, order.id)
+        try {
+          // 调用后端API检查评价状态
+          const result = await checkReviewed(item.goodsId, order.id)
+          if (result.success && result.data === true) {
+            // 商品已评价，更新状态
+            const reviewKey = `${order.id}_${item.goodsId}`
+            reviewedItems.value[reviewKey] = true
+            item.hasReviewed = true
+          }
+        } catch (error) {
+          console.error('检查评价状态失败:', error)
+        }
       }
     }
   }
+  
+  // 保存更新后的评价状态
+  localStorage.setItem('reviewedItems', JSON.stringify(reviewedItems.value))
 }
 </script>
 
@@ -637,11 +586,17 @@ const checkOrdersReviewStatus = async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+.goods-name:hover {
+  color: #409EFF;
 }
 
 .goods-price-qty {
   display: flex;
   align-items: center;
+  margin-top: 8px;
 }
 
 .goods-price {
@@ -654,6 +609,11 @@ const checkOrdersReviewStatus = async () => {
 .goods-qty {
   font-size: 12px;
   color: #999;
+  margin-right: 15px;
+}
+
+.goods-actions {
+  margin-left: auto;
 }
 
 .order-footer {
@@ -702,64 +662,5 @@ const checkOrdersReviewStatus = async () => {
 
 .pay-type-title {
   margin-bottom: 10px;
-}
-
-.review-dialog-content {
-  padding: 10px 0;
-}
-
-.select-tip {
-  margin-bottom: 15px;
-  color: #666;
-}
-
-.review-goods-list {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.review-goods-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.review-goods-item:hover {
-  background-color: #f9f9f9;
-}
-
-.review-goods-image {
-  width: 60px;
-  height: 60px;
-  margin-right: 15px;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.review-goods-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.review-goods-info {
-  flex: 1;
-}
-
-.review-goods-name {
-  font-size: 14px;
-  margin-bottom: 5px;
-}
-
-.review-goods-price {
-  color: #f56c6c;
-  font-weight: bold;
-}
-
-.review-action-btn {
-  margin-left: 10px;
 }
 </style> 

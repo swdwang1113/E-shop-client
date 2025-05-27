@@ -4,16 +4,54 @@
       <h2 class="search-title">
         搜索结果: <span class="keyword">{{ keyword }}</span>
       </h2>
-      
-      <div class="filters">
-        <el-select v-model="sortBy" placeholder="排序方式" @change="fetchGoods">
-          <el-option label="默认排序" value="" />
-          <el-option label="价格从低到高" value="price:asc" />
-          <el-option label="价格从高到低" value="price:desc" />
-          <el-option label="销量优先" value="sales:desc" />
-          <el-option label="好评优先" value="rating:desc" />
-          <el-option label="最新上架" value="newest" />
-        </el-select>
+    </div>
+    
+    <!-- 排序方式：横向按钮组 -->
+    <div class="sort-nav">
+      <div class="sort-nav-title">排序方式:</div>
+      <div class="sort-nav-list">
+        <el-button 
+          size="large"
+          :type="sortBy === '' ? 'primary' : 'default'"
+          @click="setSortBy('')"
+        >
+          默认排序
+        </el-button>
+        <el-button 
+          size="large"
+          :type="sortBy === 'price:asc' ? 'primary' : 'default'"
+          @click="setSortBy('price:asc')"
+        >
+          价格从低到高
+        </el-button>
+        <el-button 
+          size="large"
+          :type="sortBy === 'price:desc' ? 'primary' : 'default'"
+          @click="setSortBy('price:desc')"
+        >
+          价格从高到低
+        </el-button>
+        <el-button 
+          size="large"
+          :type="sortBy === 'sales:desc' ? 'primary' : 'default'"
+          @click="setSortBy('sales:desc')"
+        >
+          销量优先
+        </el-button>
+        <el-button 
+          size="large"
+          :type="sortBy === 'rating:desc' ? 'primary' : 'default'"
+          @click="setSortBy('rating:desc')"
+        >
+          好评优先
+        </el-button>
+        <el-button 
+          size="large"
+          :type="sortBy === 'newest' ? 'primary' : 'default'"
+          @click="setSortBy('newest')"
+        >
+          最新上架
+        </el-button>
       </div>
     </div>
 
@@ -34,7 +72,7 @@
             </div>
             <div class="goods-info">
               <div class="goods-name">{{ goods.name }}</div>
-              <div class="goods-price">¥{{ goods.price.toFixed(2) }}</div>
+              <div class="goods-price">¥{{ goods.price ? goods.price.toFixed(2) : '0.00' }}</div>
               <div class="goods-sales">已售 {{ goods.salesVolume || goods.sales || 0 }}</div>
             </div>
           </div>
@@ -145,6 +183,11 @@ const handleCurrentChange = (val) => {
 const goToGoodsDetail = (goodsId) => {
   router.push(`/goods/${goodsId}`)
 }
+
+const setSortBy = (newSortBy) => {
+  sortBy.value = newSortBy
+  fetchGoods()
+}
 </script>
 
 <style scoped>
@@ -171,9 +214,32 @@ const goToGoodsDetail = (goodsId) => {
   color: #409EFF;
 }
 
-.filters {
+.sort-nav {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  margin-bottom: 25px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.sort-nav-title {
+  font-weight: bold;
+  margin-right: 20px;
+  color: #606266;
+  font-size: 16px;
+}
+
+.sort-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.sort-nav-list .el-button {
+  padding: 10px 20px;
+  font-size: 14px;
 }
 
 .goods-list {
@@ -199,11 +265,16 @@ const goToGoodsDetail = (goodsId) => {
 }
 
 .goods-img {
-  height: 200px;
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 创建1:1的宽高比 */
   overflow: hidden;
 }
 
 .goods-img img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

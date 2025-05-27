@@ -2,16 +2,9 @@
   <div class="home">
     <!-- 轮播图 -->
     <div class="banner">
-      <el-carousel :interval="5000" height="400px" arrow="always">
+      <el-carousel :interval="5000" height="500px" arrow="always">
         <el-carousel-item v-for="(banner, index) in banners" :key="index">
           <img :src="banner.img" :alt="banner.title" class="banner-img">
-          <div class="banner-info">
-            <h2>{{ banner.title }}</h2>
-            <p>{{ banner.desc }}</p>
-            <el-button type="primary" size="large" @click="navigateTo(banner.link)">
-              查看详情
-            </el-button>
-          </div>
         </el-carousel-item>
       </el-carousel>
     </div>
@@ -24,7 +17,9 @@
       <el-row :gutter="30">
         <el-col :span="4" v-for="category in categories" :key="category.id" class="category-col">
           <div class="category-item" @click="goToCategory(category.id)">
-            <el-icon size="36px"><GoodsFilled /></el-icon>
+            <el-icon size="36px">
+              <component :is="getCategoryIcon(category.id)"></component>
+            </el-icon>
             <div class="category-name">{{ category.name }}</div>
           </div>
         </el-col>
@@ -53,7 +48,7 @@
             </div>
             <div class="goods-info">
               <div class="goods-name">{{ goods.name }}</div>
-              <div class="goods-price">¥{{ goods.price.toFixed(2) }}</div>
+              <div class="goods-price">¥{{ goods.price ? goods.price.toFixed(2) : '0.00' }}</div>
               <div class="goods-sales">已售 {{ goods.salesVolume || goods.sales || 0 }}</div>
             </div>
           </div>
@@ -83,7 +78,7 @@
             </div>
             <div class="goods-info">
               <div class="goods-name">{{ goods.name }}</div>
-              <div class="goods-price">¥{{ goods.price.toFixed(2) }}</div>
+              <div class="goods-price">¥{{ goods.price ? goods.price.toFixed(2) : '0.00' }}</div>
               <div class="goods-sales">已售 {{ goods.salesVolume || goods.sales || 0 }}</div>
             </div>
           </div>
@@ -96,7 +91,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { GoodsFilled } from '@element-plus/icons-vue'
+import { GoodsFilled, Cellphone, Monitor, HomeFilled, ShoppingBag, Apple, Star, Basketball, Reading, Present, Van, House, Watch } from '@element-plus/icons-vue'
 import { getGoodsList, getRecommendGoods } from '../api/goods'
 import { getCategoryList } from '../api/category'
 
@@ -105,25 +100,19 @@ const categories = ref([])
 const recommendGoods = ref([])
 const popularGoods = ref([])
 
-// 模拟轮播图数据
+// 轮播图数据
 const banners = ref([
   {
-    img: 'https://via.placeholder.com/1200x400',
-    title: '夏季新品',
-    desc: '清凉一夏，折扣多多',
-    link: '/category/1'
+    img: '/img/003.jpg',
+    title: '轮播图1',
   },
   {
-    img: 'https://via.placeholder.com/1200x400',
-    title: '电子产品',
-    desc: '最新科技，尽在掌握',
-    link: '/category/2'
+    img: '/img/004.jpg',
+    title: '轮播图2',
   },
   {
-    img: 'https://via.placeholder.com/1200x400',
-    title: '家居好物',
-    desc: '温馨家居，品质生活',
-    link: '/category/3'
+    img: '/img/006.jpg',
+    title: '轮播图3',
   }
 ])
 
@@ -160,7 +149,7 @@ const fetchData = async () => {
         console.error('获取推荐商品失败:', err)
         return { data: [] }
       }),
-      getGoodsList({ sortBy: 'sales', limit: 6 }).catch(err => {
+      getGoodsList({ sortBy: 'sales', sortDirection: 'desc', pageSize: 20 }).catch(err => {
         console.error('获取热销商品失败:', err)
         return { data: [] }
       })
@@ -168,8 +157,31 @@ const fetchData = async () => {
     
     // 更新数据
     categories.value = categoryRes.data || []
-    recommendGoods.value = recommendRes.data || []
-    popularGoods.value = popularGoodsRes.data || []
+    
+    // 确保推荐商品数据格式正确
+    recommendGoods.value = (recommendRes.data || []).map(item => ({
+      ...item,
+      price: Number(item.price || 0),
+      sales: item.salesVolume || item.sales || 0
+    }))
+    
+    // 确保热销商品数据格式正确
+    // 处理可能的不同响应格式
+    let popularGoodsData = []
+    if (popularGoodsRes.data && popularGoodsRes.data.list && Array.isArray(popularGoodsRes.data.list)) {
+      // 如果返回的是带分页的格式，取list字段
+      popularGoodsData = popularGoodsRes.data.list
+    } else if (Array.isArray(popularGoodsRes.data)) {
+      // 如果直接返回数组
+      popularGoodsData = popularGoodsRes.data
+    }
+    
+    // 处理每个商品对象，确保price是数值类型
+    popularGoods.value = popularGoodsData.map(item => ({
+      ...item,
+      price: Number(item.price || 0),
+      sales: item.salesVolume || item.sales || 0
+    }))
     
     console.log('分类数据:', categories.value)
     console.log('推荐商品:', recommendGoods.value)
@@ -209,6 +221,25 @@ const goToCategory = (categoryId) => {
 
 const goToGoodsDetail = (goodsId) => {
   router.push(`/goods/${goodsId}`)
+}
+
+// 根据分类ID获取对应图标
+const getCategoryIcon = (categoryId) => {
+  const iconMap = {
+    1: Cellphone,     // 手机数码
+    2: Monitor,       // 电脑办公
+    3: HomeFilled,    // 家用电器
+    4: ShoppingBag,   // 服装鞋包
+    5: Apple,         // 食品生鲜
+    6: Star,         // 美妆护肤
+    7: Basketball,    // 运动户外
+    8: Reading,       // 图书音像
+    67: Present,       // 母婴玩具
+    68: Van,          // 汽车用品
+    69: House,        // 家居生活
+    70: Watch,    // 珠宝首饰
+  }
+  return iconMap[categoryId] || GoodsFilled  // 默认图标
 }
 </script>
 
@@ -327,11 +358,16 @@ const goToGoodsDetail = (goodsId) => {
 }
 
 .goods-img {
-  height: 200px;
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 创建1:1的宽高比 */
   overflow: hidden;
 }
 
 .goods-img img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;

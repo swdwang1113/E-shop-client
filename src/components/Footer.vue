@@ -3,7 +3,7 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-info">
-          <h3>电商商城</h3>
+          <h3>购了么</h3>
           <p>提供优质商品和服务的在线购物平台</p>
         </div>
         
