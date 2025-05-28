@@ -4,7 +4,8 @@ import { ElMessage } from 'element-plus'
 // 创建axios实例
 const service = axios.create({
   baseURL: 'http://localhost:8080',
-  timeout: 10000
+  timeout: 10000,
+  withCredentials: true  // 允许跨域请求携带cookie
 })
 
 // 请求拦截器
@@ -13,10 +14,11 @@ service.interceptors.request.use(
     // 从localStorage获取token
     const token = localStorage.getItem('token')
     
-    // 如果是登录、注册或检查用户名请求，不添加token
+    // 如果是登录、注册、验证码或检查用户名请求，不添加token
     if (config.url === '/user/login' || 
         config.url === '/user/register' || 
-        config.url === '/user/check-username') {
+        config.url === '/user/check-username' ||
+        config.url === '/captcha/get') {
       return config
     }
     
@@ -46,6 +48,11 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
+    // 如果响应类型是blob，直接返回
+    if (response.config.responseType === 'blob') {
+      return response.data
+    }
+    
     const res = response.data
     
     // 成功响应但可能没有返回正确的格式

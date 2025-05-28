@@ -30,14 +30,21 @@ export const useUserStore = defineStore('user', {
   actions: {
     async login(userInfo) {
       try {
-        const res = await login(userInfo)
+        // 确保验证码参数被正确传递
+        const loginData = {
+          username: userInfo.username,
+          password: userInfo.password,
+          captcha: userInfo.captcha
+        }
+        
+        const res = await login(loginData)
         
         // 直接从data中获取token
         const token = res.data?.token
         
         if (!token) {
-          ElMessage.error('登录失败，未获取到token')
-          throw new Error('未获取到token')
+          ElMessage.error(res.message || '登录失败，未获取到token')
+          throw new Error(res.message || '未获取到token')
         }
         
         this.token = token
@@ -46,6 +53,7 @@ export const useUserStore = defineStore('user', {
         return res
       } catch (error) {
         console.error('登录失败:', error)
+        ElMessage.error(error.message || '登录失败，请检查用户名、密码和验证码')
         throw error
       }
     },

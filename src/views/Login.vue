@@ -25,6 +25,24 @@
           />
         </el-form-item>
         
+        <el-form-item label="验证码" prop="captcha">
+          <div class="captcha-container">
+            <el-input 
+              v-model="form.captcha" 
+              placeholder="请输入验证码" 
+              @keyup.enter="submitForm"
+              maxlength="6"
+            />
+            <div class="captcha-img" @click="refreshCaptcha" title="点击刷新验证码">
+              <img v-if="captchaUrl" :src="captchaUrl" alt="验证码" />
+              <div v-else class="captcha-loading">加载中...</div>
+            </div>
+          </div>
+          <div class="captcha-actions">
+            <el-button type="text" @click="refreshCaptcha" size="small">看不清？点击刷新</el-button>
+          </div>
+        </el-form-item>
+        
         <el-form-item>
           <el-button
             type="primary"
@@ -46,19 +64,22 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../store/user'
+import { getCaptcha } from '../api/user'
 
 const router = useRouter()
 const userStore = useUserStore()
 const formRef = ref(null)
 const loading = ref(false)
+const captchaUrl = ref('')
 
 const form = reactive({
   username: '',
-  password: ''
+  password: '',
+  captcha: ''
 })
 
 const rules = {
@@ -69,7 +90,34 @@ const rules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, max: 20, message: '密码长度应在6到20个字符之间', trigger: 'blur' }
+  ],
+  captcha: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { min: 4, max: 6, message: '请输入正确的验证码', trigger: 'blur' }
   ]
+}
+
+// 获取验证码
+const refreshCaptcha = async () => {
+  try {
+    // 先清除旧的URL，避免内存泄漏
+    if (captchaUrl.value) {
+      URL.revokeObjectURL(captchaUrl.value);
+    }
+    
+    const response = await getCaptcha();
+    
+    // 检查响应是否为Blob类型
+    if (response instanceof Blob) {
+      // 将二进制数据转换为URL
+      captchaUrl.value = URL.createObjectURL(response);
+    } else {
+      ElMessage.error('获取验证码失败，请刷新页面重试');
+    }
+  } catch (error) {
+    console.error('获取验证码失败:', error);
+    ElMessage.error('获取验证码失败，请刷新页面重试');
+  }
 }
 
 // 通用导航函数
@@ -117,12 +165,19 @@ const submitForm = async () => {
         }
       } catch (error) {
         console.error('登录失败:', error)
+        // 登录失败时刷新验证码
+        refreshCaptcha()
       } finally {
         loading.value = false
       }
     }
   })
 }
+
+// 组件挂载时获取验证码
+onMounted(() => {
+  refreshCaptcha()
+})
 </script>
 
 <style scoped>
@@ -162,5 +217,52 @@ const submitForm = async () => {
   color: #409EFF;
   text-decoration: none;
   margin-left: 5px;
+}
+
+.captcha-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;  /* 增加间距 */
+}
+
+/* 调整验证码输入框宽度 */
+.captcha-container .el-input {
+  width: 45%;  /* 稍微缩小一点 */
+}
+
+.captcha-img {
+  width: 150px;  /* 验证码图片宽度 */
+  height: 50px;  /* 验证码图片高度 */
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s;  /* 添加过渡效果 */
+}
+
+.captcha-img:hover {
+  border-color: #409EFF;  /* 鼠标悬停时边框颜色变化 */
+  box-shadow: 0 0 5px rgba(64, 158, 255, 0.5);  /* 添加阴影效果 */
+}
+
+.captcha-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.captcha-loading {
+  color: #909399;
+  font-size: 14px;
+}
+
+.captcha-actions {
+  margin-top: 5px;
+  text-align: right;
+  font-size: 12px;
+  color: #909399;
 }
 </style> 
