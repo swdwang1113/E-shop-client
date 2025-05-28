@@ -230,6 +230,7 @@ const fetchOrders = async () => {
       pageSize: pageSize.value
     }
     
+    // 只有当状态筛选不为空时，才添加status参数
     if (statusFilter.value !== '') {
       params.status = statusFilter.value
     }

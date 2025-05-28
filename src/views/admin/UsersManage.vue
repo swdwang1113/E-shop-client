@@ -11,7 +11,7 @@
       <div class="right">
         <el-input
           v-model="searchKeyword"
-          placeholder="请输入用户名/邮箱搜索"
+          placeholder="请输入用户名/手机号搜索"
           class="search-input"
           clearable
           @keyup.enter="handleSearch"
@@ -156,12 +156,23 @@ const loadUsersList = async () => {
   loading.value = true
   try {
     const params = {
-      page: currentPage.value,
+      pageNum: currentPage.value,
       pageSize: pageSize.value,
-      keyword: searchKeyword.value,
       role: roleFilter.value
     }
     
+    // 处理搜索关键词
+    if (searchKeyword.value) {
+      // 判断是否为手机号格式（简单判断：11位数字）
+      if (/^1\d{10}$/.test(searchKeyword.value)) {
+        params.phone = searchKeyword.value
+      } else {
+        // 否则作为用户名搜索
+        params.username = searchKeyword.value
+      }
+    }
+    
+    console.log('请求参数:', params)
     const res = await getUserList(params)
     if (res.code === 200 && res.data) {
       usersList.value = res.data.list

@@ -205,10 +205,17 @@ export function updateGoodsStatus(id, status) {
  * @returns {Promise} 返回订单列表
  */
 export function getOrdersList(params) {
+  // 处理请求参数，确保空字符串或null的status不会被发送
+  const requestParams = { ...params };
+  
+  if (requestParams.status === '' || requestParams.status === null) {
+    delete requestParams.status;
+  }
+  
   return request({
     url: '/api/admin/orders',
     method: 'get',
-    params
+    params: requestParams
   })
 }
 
@@ -270,10 +277,20 @@ export function exportOrdersData(params) {
  * @returns {Promise} 返回用户列表
  */
 export function getUserList(params) {
+  // 处理请求参数，确保空字符串或null的参数不会被发送
+  const requestParams = { ...params };
+  
+  // 清理空值参数
+  Object.keys(requestParams).forEach(key => {
+    if (requestParams[key] === '' || requestParams[key] === null) {
+      delete requestParams[key];
+    }
+  });
+  
   return request({
     url: '/api/admin/users',
     method: 'get',
-    params
+    params: requestParams
   })
 }
 

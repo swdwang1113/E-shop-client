@@ -27,6 +27,11 @@ export function getOrderList(params) {
     pageSize: params.pageSize || 10
   }
   
+  // 确保status参数正确传递，当status为空字符串时不传递该参数
+  if (requestParams.status === '') {
+    delete requestParams.status;
+  }
+  
   return request({
     url: '/api/orders',
     method: 'get',

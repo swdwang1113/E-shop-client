@@ -11,7 +11,7 @@
       <div class="right">
         <el-input
           v-model="searchKeyword"
-          placeholder="请输入订单号/用户名搜索"
+          placeholder="输入订单号或用户ID搜索"
           class="search-input"
           clearable
           @keyup.enter="handleSearch"
@@ -58,7 +58,7 @@
       <el-table-column label="用户信息" width="150">
         <template #default="scope">
           <div class="user-info">
-            <div>{{ scope.row.username }}</div>
+            <div>{{ scope.row.address?.name || '用户' + scope.row.userId }}</div>
             <div class="user-id">ID: {{ scope.row.userId }}</div>
           </div>
         </template>
@@ -162,6 +162,10 @@
             <div class="info-item">
               <span class="label">用户ID:</span>
               <span>{{ expandedOrder.userId }}</span>
+            </div>
+            <div class="info-item">
+              <span class="label">用户名:</span>
+              <span>{{ expandedOrder.address?.name || '用户' + expandedOrder.userId }}</span>
             </div>
           </div>
           
@@ -274,9 +278,7 @@ const statusOptions = [
   { value: 1, label: '待发货' },
   { value: 2, label: '已发货' },
   { value: 3, label: '已完成' },
-  { value: 4, label: '已取消' },
-  { value: 5, label: '申请退款' },
-  { value: 6, label: '已退款' }
+  { value: 4, label: '已取消' }
 ]
 
 // 加载订单列表数据
@@ -284,17 +286,34 @@ const loadOrdersList = async () => {
   loading.value = true
   try {
     const params = {
-      page: currentPage.value,
+      pageNum: currentPage.value,  // 修正参数名称为pageNum
       pageSize: pageSize.value,
-      keyword: searchKeyword.value,
-      status: statusFilter.value,
       startDate: dateRange.value ? dateRange.value[0] : undefined,
       endDate: dateRange.value ? dateRange.value[1] : undefined
     }
     
+    // 只有当状态筛选有值时才添加status参数
+    if (statusFilter.value !== '' && statusFilter.value !== null) {
+      params.status = statusFilter.value
+    }
+    
+    // 处理搜索关键词，判断是否为订单号或用户ID
+    if (searchKeyword.value) {
+      // 如果输入的是纯数字，可能是用户ID
+      if (/^\d+$/.test(searchKeyword.value)) {
+        params.userId = parseInt(searchKeyword.value)
+      } else {
+        // 否则当作订单号关键词搜索
+        params.orderNo = searchKeyword.value
+      }
+    }
+    
     const res = await getOrdersList(params)
+    console.log('管理员订单列表返回数据:', res)
+    
     if (res.code === 200 && res.data) {
       ordersList.value = res.data.list || []
+      console.log('订单列表数据结构:', ordersList.value[0])
       total.value = res.data.total || 0
     } else {
       ElMessage.error(res.message || '获取订单列表失败')
@@ -477,10 +496,26 @@ const handleDelete = async (row) => {
 const exportOrders = async () => {
   try {
     const params = {
-      keyword: searchKeyword.value,
-      status: statusFilter.value,
+      pageNum: 1,
+      pageSize: 1000, // 导出更多数据
       startDate: dateRange.value ? dateRange.value[0] : undefined,
       endDate: dateRange.value ? dateRange.value[1] : undefined
+    }
+    
+    // 只有当状态筛选有值时才添加status参数
+    if (statusFilter.value !== '' && statusFilter.value !== null) {
+      params.status = statusFilter.value
+    }
+    
+    // 处理搜索关键词，判断是否为订单号或用户ID
+    if (searchKeyword.value) {
+      // 如果输入的是纯数字，可能是用户ID
+      if (/^\d+$/.test(searchKeyword.value)) {
+        params.userId = parseInt(searchKeyword.value)
+      } else {
+        // 否则当作订单号关键词搜索
+        params.orderNo = searchKeyword.value
+      }
     }
     
     await exportOrdersData(params)
