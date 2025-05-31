@@ -38,6 +38,11 @@
               type="success" 
               @click="activeTab = 'favorite'"
             >我的收藏</el-button>
+            <el-button 
+              :class="{ 'active-tab': activeTab === 'refunds' }" 
+              type="info" 
+              @click="goToRefunds"
+            >退款申请</el-button>
             <el-button type="danger" @click="handleLogout">退出登录</el-button>
           </div>
         </el-card>
@@ -691,10 +696,7 @@ const handleLogout = async () => {
 
 // 跳转到商品详情
 const goToGoodsDetail = (goodsId) => {
-  if (!goodsId) {
-    ElMessage.warning('商品ID不存在，无法查看详情')
-    return
-  }
+  if (!goodsId) return
   router.push(`/goods/${goodsId}`)
 }
 
@@ -723,6 +725,11 @@ const removeFavoriteItem = async (goodsId) => {
       ElMessage.error('取消收藏失败: ' + (error.message || '未知错误'))
     }
   }
+}
+
+// 跳转到退款申请页面
+const goToRefunds = () => {
+  router.push('/refunds')
 }
 </script>
 

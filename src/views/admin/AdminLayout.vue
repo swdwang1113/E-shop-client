@@ -31,6 +31,11 @@
             <span>订单管理</span>
           </el-menu-item>
           
+          <el-menu-item index="/admin/refunds">
+            <el-icon><RefreshRight /></el-icon>
+            <span>退款管理</span>
+          </el-menu-item>
+          
           <el-menu-item index="/admin/categories">
             <el-icon><IconMenu /></el-icon>
             <span>分类管理</span>
@@ -114,7 +119,8 @@ import {
   User, 
   Fold, 
   Expand, 
-  ArrowDown
+  ArrowDown,
+  RefreshRight
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 
@@ -155,7 +161,8 @@ const breadcrumbs = computed(() => {
       'goods': '商品管理',
       'orders': '订单管理',
       'users': '用户管理',
-      'categories': '分类管理'
+      'categories': '分类管理',
+      'refunds': '退款管理'
     }
     
     if (translations[lastPart]) {

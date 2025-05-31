@@ -165,7 +165,15 @@
             </el-button>
             
             <el-button 
-              v-if="orderInfo.status === 3 || orderInfo.status === 4" 
+              v-if="orderInfo.status === 1 || orderInfo.status === 2" 
+              type="warning"
+              @click="showRefundDialog"
+            >
+              申请退款
+            </el-button>
+            
+            <el-button 
+              v-if="orderInfo.status === 3 || orderInfo.status === 4 || orderInfo.status === 5" 
               type="danger"
               @click="deleteOrder"
             >
@@ -209,6 +217,47 @@
           <el-button @click="payDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="confirmPay" :loading="payLoading">
             确认支付
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 退款申请对话框 -->
+    <el-dialog
+      v-model="refundDialogVisible"
+      title="申请退款"
+      width="500px"
+    >
+      <div class="refund-dialog-content">
+        <p class="refund-amount">退款金额：<span class="price">¥{{ (orderInfo?.totalAmount || 0).toFixed(2) }}</span></p>
+        
+        <el-form :model="refundForm" label-width="100px">
+          <el-form-item label="退款原因" required>
+            <el-select v-model="refundForm.reason" placeholder="请选择退款原因" style="width: 100%">
+              <el-option label="商品质量问题" value="商品质量问题" />
+              <el-option label="商品与描述不符" value="商品与描述不符" />
+              <el-option label="收到商品破损" value="收到商品破损" />
+              <el-option label="多拍/拍错/不想要" value="多拍/拍错/不想要" />
+              <el-option label="其他原因" value="其他原因" />
+            </el-select>
+          </el-form-item>
+          
+          <el-form-item label="详细说明">
+            <el-input
+              v-model="refundForm.description"
+              type="textarea"
+              :rows="4"
+              placeholder="请详细描述退款原因..."
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="refundDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitRefund" :loading="refundLoading">
+            提交申请
           </el-button>
         </span>
       </template>
@@ -289,6 +338,7 @@ import {
   confirmReceipt as apiConfirmReceipt, 
   getShippingRoute 
 } from '../api/order'
+import { applyRefund } from '../api/refund'
 
 // 接收props
 const props = defineProps({
@@ -317,6 +367,14 @@ const shippingInfo = ref(null)
 const routeDialogVisible = ref(false)
 const routeInfo = ref(null)
 const routeLoaded = ref(false)
+
+// 退款相关
+const refundDialogVisible = ref(false)
+const refundLoading = ref(false)
+const refundForm = ref({
+  reason: '',
+  description: ''
+})
 
 // 先定义fetchOrderDetail函数
 const fetchOrderDetail = async () => {
@@ -785,6 +843,43 @@ const getPointStatusText = (status) => {
     3: '已送达'
   }
   return texts[status] || '未知状态'
+}
+
+// 显示退款对话框
+const showRefundDialog = () => {
+  // 重置表单
+  refundForm.value = {
+    reason: '',
+    description: ''
+  }
+  refundDialogVisible.value = true
+}
+
+// 提交退款申请
+const submitRefund = async () => {
+  if (!refundForm.value.reason) {
+    ElMessage.warning('请选择退款原因')
+    return
+  }
+  
+  try {
+    refundLoading.value = true
+    const orderId = getOrderId()
+    const res = await applyRefund(orderId, refundForm.value)
+    
+    if (res.success) {
+      ElMessage.success('退款申请已提交')
+      refundDialogVisible.value = false
+      // 刷新订单详情
+      await fetchOrderDetail()
+    } else {
+      ElMessage.error(res.message || '提交退款申请失败')
+    }
+  } catch (error) {
+    ElMessage.error('提交退款申请失败: ' + (error.message || '未知错误'))
+  } finally {
+    refundLoading.value = false
+  }
 }
 </script>
 

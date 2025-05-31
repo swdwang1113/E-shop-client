@@ -11,6 +11,7 @@
           <el-option label="已发货" :value="2" />
           <el-option label="已完成" :value="3" />
           <el-option label="已取消" :value="4" />
+          <el-option label="已退款" :value="5" />
         </el-select>
       </div>
     </div>
@@ -315,25 +316,27 @@ const getTotalQuantity = (order) => {
 }
 
 const getStatusText = (status) => {
-  const statusMap = {
+  const texts = {
     0: '待付款',
     1: '已付款',
     2: '已发货',
     3: '已完成',
-    4: '已取消'
+    4: '已取消',
+    5: '已退款'
   }
-  return statusMap[status] || '未知状态'
+  return texts[status] || '未知状态'
 }
 
 const getStatusType = (status) => {
-  const typeMap = {
-    0: 'warning',
-    1: 'primary',
-    2: 'success',
-    3: 'success',
-    4: 'info'
+  const types = {
+    0: 'warning',   // 待付款
+    1: 'info',      // 已付款
+    2: 'primary',   // 已发货
+    3: 'success',   // 已完成
+    4: 'danger',    // 已取消
+    5: 'warning'    // 已退款
   }
-  return typeMap[status] || ''
+  return types[status] || 'info'
 }
 
 const formatDateTime = (dateTimeStr) => {

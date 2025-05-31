@@ -62,6 +62,14 @@ const routes = [
         meta: { 
           keepAlive: false
         }
+      },
+      {
+        path: '/refunds',
+        name: 'RefundList',
+        component: () => import('../views/RefundList.vue'),
+        meta: { 
+          keepAlive: false
+        }
       }
     ]
   },
@@ -104,6 +112,11 @@ const routes = [
         path: 'categories',
         name: 'CategoriesManage',
         component: () => import('../views/admin/CategoriesManage.vue')
+      },
+      {
+        path: 'refunds',
+        name: 'RefundManage',
+        component: () => import('../views/admin/RefundManage.vue')
       }
       // 物流路线页面已被后端移除，现在在订单管理中直接查看物流
     ]
@@ -142,7 +155,7 @@ router.beforeEach((to, from, next) => {
     }
   } 
   // 需要登录的路由
-  else if (to.path.startsWith('/orders') || to.path === '/cart' || to.path === '/checkout' || to.path === '/user') {
+  else if (to.path.startsWith('/orders') || to.path === '/cart' || to.path === '/checkout' || to.path === '/user' || to.path === '/refunds') {
     if (token) {
       next()
     } else {
