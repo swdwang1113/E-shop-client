@@ -78,6 +78,14 @@ export function payOrder(id, paymentType) {
   })
 }
 
+// 支付宝支付
+export function alipayOrder(id) {
+  return request({
+    url: `/api/orders/${id}/alipay`,
+    method: 'post'
+  })
+}
+
 // 确认收货
 export function confirmReceipt(id) {
   return request({
@@ -117,4 +125,4 @@ export function deleteOrderAdmin(id) {
     url: `/api/admin/orders/${id}`,
     method: 'delete'
   })
-} 
+}

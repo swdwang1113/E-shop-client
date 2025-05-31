@@ -180,6 +180,9 @@
         </span>
       </template>
     </el-dialog>
+    
+    <!-- 支付宝支付表单容器 (隐藏) -->
+    <div ref="alipayFormContainer" style="display: none;"></div>
   </div>
 </template>
 
@@ -187,7 +190,7 @@
 import { ref, onMounted, watch, defineProps } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrderDetail, cancelOrder as apiCancelOrder, payOrder as apiPayOrder, deleteOrder as apiDeleteOrder, confirmReceipt as apiConfirmReceipt } from '../api/order'
+import { getOrderDetail, cancelOrder as apiCancelOrder, payOrder as apiPayOrder, deleteOrder as apiDeleteOrder, confirmReceipt as apiConfirmReceipt, alipayOrder } from '../api/order'
 
 // 接收props
 const props = defineProps({
@@ -296,6 +299,13 @@ onMounted(() => {
   if (getOrderId()) {
     console.log('组件挂载时立即请求数据')
     fetchOrderDetail()
+    
+    // 检查URL参数，如果有retry=payment，则自动打开支付对话框
+    if (route.query.retry === 'payment' && orderInfo.value && orderInfo.value.status === 0) {
+      setTimeout(() => {
+        payOrder()
+      }, 500) // 延迟500ms，确保订单信息已加载
+    }
   }
 })
 
@@ -400,12 +410,76 @@ const confirmPay = async () => {
   
   payLoading.value = true
   try {
-    await apiPayOrder(getOrderId(), payType.value)
-    ElMessage.success('支付成功')
-    payDialogVisible.value = false
-    fetchOrderDetail()
+    // 如果是支付宝支付，使用新的支付宝接口
+    if (payType.value === 1) {
+      const res = await alipayOrder(getOrderId())
+      if (res.success) {
+        // 关闭支付对话框
+        payDialogVisible.value = false
+        
+        // 创建一个div来渲染支付表单
+        const alipayFormContainer = document.querySelector('#alipayFormContainer') || document.createElement('div')
+        alipayFormContainer.id = 'alipayFormContainer'
+        alipayFormContainer.innerHTML = res.data
+        document.body.appendChild(alipayFormContainer)
+        
+        // 手动提取表单action和参数，创建新表单并提交
+        try {
+          const formElement = alipayFormContainer.querySelector('form')
+          if (formElement) {
+            const action = formElement.getAttribute('action')
+            
+            // 获取所有表单输入字段
+            const inputs = formElement.querySelectorAll('input')
+            
+            // 创建新表单并提交
+            const newForm = document.createElement('form')
+            newForm.method = 'POST'
+            newForm.action = action.trim() // 确保去除可能的前后空格
+            newForm.target = '_self' // 在当前窗口打开
+            
+            // 添加所有原始表单参数
+            inputs.forEach(input => {
+              const newInput = document.createElement('input')
+              newInput.type = 'hidden'
+              newInput.name = input.name
+              newInput.value = input.value
+              newForm.appendChild(newInput)
+            })
+            
+            // 添加到body并提交
+            document.body.appendChild(newForm)
+            console.log('提交支付表单到:', action)
+            
+            // 确保表单提交
+            setTimeout(() => {
+              newForm.submit()
+              console.log('表单已提交')
+            }, 100)
+          } else {
+            console.error('未找到支付表单元素')
+            ElMessage.error('支付跳转失败，请稍后重试')
+          }
+        } catch (err) {
+          console.error('提交支付表单失败:', err)
+          ElMessage.error('支付跳转失败，请稍后重试')
+        }
+        
+        // 注意：支付成功后，支付宝会跳转回系统配置的returnUrl
+        // 前端需要在returnUrl页面处理订单状态的展示
+      } else {
+        ElMessage.error(res.message || '获取支付表单失败')
+      }
+    } else {
+      // 其他支付方式仍使用原来的接口
+      await apiPayOrder(getOrderId(), payType.value)
+      ElMessage.success('支付成功')
+      payDialogVisible.value = false
+      fetchOrderDetail()
+    }
   } catch (error) {
     console.error('支付失败:', error)
+    ElMessage.error('支付失败，请稍后重试')
   } finally {
     payLoading.value = false
   }
@@ -626,4 +700,4 @@ const deleteOrder = () => {
   gap: 10px;
   justify-content: center;
 }
-</style> 
+</style>

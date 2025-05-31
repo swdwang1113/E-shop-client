@@ -232,14 +232,27 @@ export function getOrderDetail(id) {
 }
 
 /**
- * 订单发货
- * @param {Number} id 订单ID
+ * 订单发货 - 创建物流信息
+ * @param {Object} data 物流数据，包含orderId、shippingCompany、trackingNumber、senderAddress
  * @returns {Promise} 返回发货结果
  */
-export function shipOrder(id) {
+export function createShipping(data) {
   return request({
-    url: `/api/admin/orders/${id}/ship`,
-    method: 'post'
+    url: '/api/admin/shipping/create',
+    method: 'post',
+    params: data
+  })
+}
+
+/**
+ * 获取物流路线（管理员）
+ * @param {Number} orderId 订单ID
+ * @returns {Promise} 返回物流路线信息
+ */
+export function getShippingRoute(orderId) {
+  return request({
+    url: `/api/admin/shipping/route/${orderId}`,
+    method: 'get'
   })
 }
 

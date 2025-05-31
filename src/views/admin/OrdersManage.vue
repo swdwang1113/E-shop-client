@@ -227,6 +227,144 @@
         <div v-if="expandedOrder.status === 1" class="shipment-section">
           <el-button type="primary" @click="handleShipment(expandedOrder)">发货处理</el-button>
         </div>
+        
+        <!-- 物流信息 -->
+        <div v-if="expandedOrder.status >= 2" class="logistics-section">
+          <h4>物流信息</h4>
+          <div v-if="shippingInfo" class="logistics-info">
+            <div class="detail-section">
+              <div class="info-item">
+                <span class="label">物流公司:</span>
+                <span>{{ shippingInfo.shippingCompany }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">物流单号:</span>
+                <span>{{ shippingInfo.trackingNumber }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">发货地址:</span>
+                <span>{{ shippingInfo.senderAddress }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">预计送达:</span>
+                <span>{{ shippingInfo.estimatedTime }}</span>
+              </div>
+              <div class="info-item" style="margin-top: 15px;">
+                <el-button type="primary" size="small" @click="viewShippingRoute(expandedOrder.id)">
+                  查看物流路线
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <div v-else>
+            <el-empty description="暂无物流信息" />
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+    
+    <!-- 发货表单弹窗 -->
+    <el-dialog
+      v-model="shippingFormVisible"
+      title="发货处理"
+      width="500px"
+      destroy-on-close
+    >
+      <el-form
+        ref="shippingFormRef"
+        :model="shippingForm"
+        :rules="shippingRules"
+        label-width="100px"
+        label-position="right"
+      >
+        <el-form-item label="订单号" prop="orderId">
+          <el-input v-model="shippingForm.orderNo" disabled />
+        </el-form-item>
+        <el-form-item label="物流公司" prop="shippingCompany">
+          <el-select v-model="shippingForm.shippingCompany" placeholder="请选择物流公司" style="width: 100%">
+            <el-option label="顺丰速运" value="顺丰速运" />
+            <el-option label="中通快递" value="中通快递" />
+            <el-option label="圆通快递" value="圆通快递" />
+            <el-option label="韵达快递" value="韵达快递" />
+            <el-option label="申通快递" value="申通快递" />
+            <el-option label="京东物流" value="京东物流" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="物流单号" prop="trackingNumber">
+          <el-input v-model="shippingForm.trackingNumber" placeholder="请输入物流单号" />
+        </el-form-item>
+        <el-form-item label="发货地址" prop="senderAddress">
+          <el-input v-model="shippingForm.senderAddress" placeholder="请输入发货地址" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="shippingFormVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitShipping" :loading="submitLoading">
+            确认发货
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+    
+    <!-- 物流路线弹窗 -->
+    <el-dialog
+      v-model="routeDialogVisible"
+      title="物流路线"
+      width="80%"
+      destroy-on-close
+    >
+      <div v-if="routeInfo" class="route-info">
+        <div class="route-header">
+          <div class="detail-sections">
+            <div class="detail-section">
+              <div class="info-item">
+                <span class="label">物流公司:</span>
+                <span>{{ routeInfo.shippingInfo.shippingCompany }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">物流单号:</span>
+                <span>{{ routeInfo.shippingInfo.trackingNumber }}</span>
+              </div>
+            </div>
+            <div class="detail-section">
+              <div class="info-item">
+                <span class="label">发货地址:</span>
+                <span>{{ routeInfo.shippingInfo.senderAddress }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">收货地址:</span>
+                <span>{{ routeInfo.shippingInfo.receiverAddress }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 物流路线图 -->
+        <div class="route-map">
+          <div class="map-placeholder">
+            <el-empty description="物流路线地图加载中..." v-if="!routeLoaded" />
+            <div id="route-map-container" style="height: 400px; width: 100%;" v-else></div>
+          </div>
+        </div>
+        
+        <!-- 物流路径点 -->
+        <div class="route-path-points">
+          <h4>物流轨迹</h4>
+          <el-timeline>
+            <el-timeline-item
+              v-for="(point, index) in routeInfo.pathPoints"
+              :key="index"
+              :timestamp="point.time"
+              :type="getPointStatusType(point.status)"
+            >
+              {{ getPointStatusText(point.status) }}
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </div>
+      <div v-else>
+        <el-empty description="暂无物流路线信息" />
       </div>
     </el-dialog>
     
@@ -253,9 +391,10 @@ import { Download, Search, Close } from '@element-plus/icons-vue'
 import { 
   getOrdersList, 
   getOrderDetail, 
-  shipOrder, 
   exportOrdersData,
-  deleteOrderAdmin
+  deleteOrderAdmin,
+  createShipping,
+  getShippingRoute
 } from '../../api/admin'
 
 const router = useRouter()
@@ -271,6 +410,33 @@ const statusFilter = ref('')
 const dateRange = ref([])
 const expandedOrder = ref(null)
 const orderDetailVisible = ref(false)
+const shippingFormVisible = ref(false)
+const shippingForm = ref({
+  orderId: null,
+  orderNo: '',
+  shippingCompany: '',
+  trackingNumber: '',
+  senderAddress: ''
+})
+const shippingFormRef = ref(null)
+const submitLoading = ref(false)
+const routeDialogVisible = ref(false)
+const routeInfo = ref(null)
+const routeLoaded = ref(false)
+const shippingInfo = ref(null)
+
+// 发货表单验证规则
+const shippingRules = {
+  shippingCompany: [
+    { required: true, message: '请选择物流公司', trigger: 'change' }
+  ],
+  trackingNumber: [
+    { required: true, message: '请输入物流单号', trigger: 'blur' }
+  ],
+  senderAddress: [
+    { required: true, message: '请输入发货地址', trigger: 'blur' }
+  ]
+}
 
 // 订单状态选项
 const statusOptions = [
@@ -309,11 +475,9 @@ const loadOrdersList = async () => {
     }
     
     const res = await getOrdersList(params)
-    console.log('管理员订单列表返回数据:', res)
     
     if (res.code === 200 && res.data) {
       ordersList.value = res.data.list || []
-      console.log('订单列表数据结构:', ordersList.value[0])
       total.value = res.data.total || 0
     } else {
       ElMessage.error(res.message || '获取订单列表失败')
@@ -410,6 +574,18 @@ const handleDetail = async (row) => {
     if (res.code === 200 && res.data) {
       expandedOrder.value = res.data
       orderDetailVisible.value = true
+      
+      // 如果订单已发货，尝试获取物流信息
+      if (expandedOrder.value.status >= 2) {
+        try {
+          const routeRes = await getShippingRoute(expandedOrder.value.id)
+          if (routeRes.code === 200 && routeRes.data) {
+            shippingInfo.value = routeRes.data.shippingInfo
+          }
+        } catch (error) {
+          console.error('获取物流信息失败:', error)
+        }
+      }
     } else {
       ElMessage.error(res.message || '获取订单详情失败')
     }
@@ -422,38 +598,238 @@ const handleDetail = async (row) => {
 }
 
 // 处理发货
-const handleShipment = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确定要为订单 ${row.orderNo} 发货吗？`, '确认发货', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'info'
-    })
+const handleShipment = (row) => {
+  shippingForm.value = {
+    orderId: row.id,
+    orderNo: row.orderNo,  // 保留orderNo用于显示，但不会发送到后端
+    shippingCompany: '',
+    trackingNumber: '',
+    senderAddress: '广东省深圳市南山区科技园'  // 默认发货地址
+  }
+  shippingFormVisible.value = true
+}
+
+// 提交发货信息
+const submitShipping = async () => {
+  if (!shippingFormRef.value) return
+  
+  await shippingFormRef.value.validate(async (valid) => {
+    if (!valid) return
     
-    loading.value = true
-    const res = await shipOrder(row.id)
-    
-    if (res.code === 200) {
-      ElMessage.success('发货成功')
+    try {
+      submitLoading.value = true
       
-      // 刷新订单列表
-      loadOrdersList()
-      
-      // 如果当前有展开的订单，更新其状态
-      if (expandedOrder.value && expandedOrder.value.id === row.id) {
-        expandedOrder.value.status = 2 // 更新为已发货状态
+      // 创建一个新对象，只包含API需要的字段
+      const shippingData = {
+        orderId: shippingForm.value.orderId,
+        shippingCompany: shippingForm.value.shippingCompany,
+        trackingNumber: shippingForm.value.trackingNumber,
+        senderAddress: shippingForm.value.senderAddress
       }
-    } else {
-      ElMessage.error(res.message || '发货失败')
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
+      
+      const res = await createShipping(shippingData)
+      
+      if (res.code === 200) {
+        ElMessage.success('发货成功')
+        shippingFormVisible.value = false
+        
+        // 刷新订单列表
+        loadOrdersList()
+        
+        // 如果当前有展开的订单，更新其状态
+        if (expandedOrder.value && expandedOrder.value.id === shippingForm.value.orderId) {
+          expandedOrder.value.status = 2 // 更新为已发货状态
+          
+          // 更新物流信息
+          shippingInfo.value = res.data
+        }
+      } else {
+        ElMessage.error(res.message || '发货失败')
+      }
+    } catch (error) {
       ElMessage.error('发货失败')
       console.error(error)
+    } finally {
+      submitLoading.value = false
     }
+  })
+}
+
+// 查看物流路线
+const viewShippingRoute = async (orderId) => {
+  try {
+    loading.value = true
+    const res = await getShippingRoute(orderId)
+    
+    if (res.code === 200 && res.data) {
+      routeInfo.value = res.data
+      routeDialogVisible.value = true
+      
+      // 延迟加载地图
+      setTimeout(() => {
+        loadRouteMap()
+      }, 500)
+    } else {
+      ElMessage.error(res.message || '获取物流路线失败')
+    }
+  } catch (error) {
+    ElMessage.error('获取物流路线失败')
+    console.error(error)
   } finally {
     loading.value = false
   }
+}
+
+// 初始化地图
+const initMap = (senderLng, senderLat, receiverLng, receiverLat) => {
+  try {
+    // 创建地图实例
+    const map = new window.AMap.Map('route-map-container', {
+      zoom: 8,
+      center: [(senderLng + receiverLng) / 2, (senderLat + receiverLat) / 2],
+      resizeEnable: true
+    });
+    
+    // 添加起点和终点标记
+    const startMarker = new window.AMap.Marker({
+      position: [senderLng, senderLat],
+      title: '发货地',
+      label: { content: '发货地', direction: 'right' }
+    });
+    
+    const endMarker = new window.AMap.Marker({
+      position: [receiverLng, receiverLat],
+      title: '收货地',
+      label: { content: '收货地', direction: 'right' }
+    });
+    
+    map.add([startMarker, endMarker]);
+    
+    // 添加信息窗体
+    startMarker.on('click', () => {
+      new window.AMap.InfoWindow({
+        content: `<div style="padding:10px;"><h4>发货地</h4><p>${routeInfo.value.shippingInfo.senderAddress}</p></div>`,
+        offset: new window.AMap.Pixel(0, -30)
+      }).open(map, startMarker.getPosition());
+    });
+    
+    endMarker.on('click', () => {
+      new window.AMap.InfoWindow({
+        content: `<div style="padding:10px;"><h4>收货地</h4><p>${routeInfo.value.shippingInfo.receiverAddress}</p></div>`,
+        offset: new window.AMap.Pixel(0, -30)
+      }).open(map, endMarker.getPosition());
+    });
+    
+    // 绘制直线连接起点和终点
+    const polyline = new window.AMap.Polyline({
+      path: [[senderLng, senderLat], [receiverLng, receiverLat]],
+      strokeColor: '#3498db',
+      strokeWeight: 6,
+      strokeOpacity: 0.8,
+      showDir: true,
+      lineJoin: 'round'
+    });
+    
+    map.add(polyline);
+    
+    // 计算两点之间的距离并显示
+    const distance = window.AMap.GeometryUtil.distance([senderLng, senderLat], [receiverLng, receiverLat]);
+    const distanceText = distance > 1000 ? `约 ${(distance / 1000).toFixed(1)} 公里` : `约 ${Math.round(distance)} 米`;
+    
+    // 在路线中间添加距离标签
+    const midPoint = [(senderLng + receiverLng) / 2, (senderLat + receiverLat) / 2];
+    const distanceMarker = new window.AMap.Marker({
+      position: midPoint,
+      content: `<div style="background-color: white; padding: 5px 10px; border-radius: 15px; border: 1px solid #3498db; font-size: 12px;">
+        <span>${distanceText}</span>
+      </div>`,
+      offset: new window.AMap.Pixel(0, -10),
+      anchor: 'bottom-center'
+    });
+    
+    map.add(distanceMarker);
+    map.setFitView();
+    
+  } catch (error) {
+    console.error('初始化地图失败:', error);
+    ElMessage.error('地图初始化失败');
+  }
+}
+
+// 加载物流路线地图
+const loadRouteMap = () => {
+  if (!routeInfo.value) return;
+  
+  routeLoaded.value = true;
+  
+  try {
+    // 获取坐标
+    const senderLng = parseFloat(routeInfo.value.senderLocation.longitude);
+    const senderLat = parseFloat(routeInfo.value.senderLocation.latitude);
+    const receiverLng = parseFloat(routeInfo.value.receiverLocation.longitude);
+    const receiverLat = parseFloat(routeInfo.value.receiverLocation.latitude);
+    
+    // 确保坐标有效
+    if (isNaN(senderLng) || isNaN(senderLat) || isNaN(receiverLng) || isNaN(receiverLat)) {
+      ElMessage.warning('物流坐标数据格式错误，无法显示地图');
+      return;
+    }
+    
+    // 延迟执行，确保DOM已经完全渲染
+    setTimeout(() => {
+      // 准备地图容器
+      const mapContainer = document.getElementById('route-map-container');
+      if (!mapContainer) {
+        console.error('找不到地图容器');
+        return;
+      }
+      
+      // 确保容器有尺寸
+      if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+        mapContainer.style.width = '100%';
+        mapContainer.style.height = '400px';
+        mapContainer.style.display = 'block';
+      }
+      
+      // 清空容器
+      mapContainer.innerHTML = '';
+      
+      // 加载高德地图API
+      if (!window.AMap) {
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://webapi.amap.com/maps?v=2.0&key=017045315860ec69975d7a0a49f15511';
+        script.onload = () => initMap(senderLng, senderLat, receiverLng, receiverLat);
+        script.onerror = () => ElMessage.error('地图加载失败');
+        document.head.appendChild(script);
+      } else {
+        initMap(senderLng, senderLat, receiverLng, receiverLat);
+      }
+    }, 1000);
+  } catch (error) {
+    console.error('加载地图失败:', error);
+    ElMessage.warning('地图加载失败，但您仍可以查看物流信息');
+  }
+}
+
+// 获取物流节点状态类型
+const getPointStatusType = (status) => {
+  const types = {
+    1: 'primary',   // 已发货
+    2: 'warning',   // 运输中
+    3: 'success'    // 已送达
+  }
+  return types[status] || 'info'
+}
+
+// 获取物流节点状态文本
+const getPointStatusText = (status) => {
+  const texts = {
+    1: '已从仓库发出',
+    2: '运输中',
+    3: '已送达'
+  }
+  return texts[status] || '未知状态'
 }
 
 // 删除订单
@@ -663,5 +1039,74 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.logistics-section {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  border: 1px solid #ebeef5;
+}
+
+.logistics-section h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 10px;
+}
+
+.logistics-info {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.route-header {
+  margin-bottom: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 15px;
+  border: 1px solid #ebeef5;
+}
+
+.route-map {
+  height: 400px;
+  margin-bottom: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.map-placeholder {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f5f7fa;
+}
+
+.route-path-points {
+  margin-top: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 15px;
+  border: 1px solid #ebeef5;
+}
+
+.route-path-points h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 10px;
+}
+
+.route-info {
+  padding: 0;
 }
 </style> 

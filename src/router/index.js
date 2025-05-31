@@ -54,6 +54,14 @@ const routes = [
         path: '/search',
         name: 'Search',
         component: () => import('../views/Search.vue')
+      },
+      {
+        path: '/payment/result',
+        name: 'PaymentResult',
+        component: () => import('../views/PaymentResult.vue'),
+        meta: { 
+          keepAlive: false
+        }
       }
     ]
   },
@@ -97,6 +105,7 @@ const routes = [
         name: 'CategoriesManage',
         component: () => import('../views/admin/CategoriesManage.vue')
       }
+      // 物流路线页面已被后端移除，现在在订单管理中直接查看物流
     ]
   },
   {
@@ -144,4 +153,4 @@ router.beforeEach((to, from, next) => {
   }
 })
 
-export default router 
+export default router
