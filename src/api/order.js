@@ -78,14 +78,6 @@ export function payOrder(id, paymentType) {
   })
 }
 
-// 支付宝支付
-export function alipayOrder(id) {
-  return request({
-    url: `/api/orders/${id}/alipay`,
-    method: 'post'
-  })
-}
-
 // 确认收货
 export function confirmReceipt(id) {
   return request({
@@ -124,5 +116,13 @@ export function deleteOrderAdmin(id) {
   return request({
     url: `/api/admin/orders/${id}`,
     method: 'delete'
+  })
+}
+
+// 获取物流路线信息
+export function getShippingRoute(orderId) {
+  return request({
+    url: `/api/shipping/route/${orderId}`,
+    method: 'get'
   })
 }

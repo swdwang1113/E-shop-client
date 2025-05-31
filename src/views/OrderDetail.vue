@@ -39,6 +39,39 @@
         </el-descriptions>
       </el-card>
       
+      <!-- 物流信息 - 当订单状态为已发货或已完成时显示 -->
+      <el-card v-if="orderInfo.status >= 2" class="info-card">
+        <template #header>
+          <div class="card-header">
+            <h3>物流信息</h3>
+          </div>
+        </template>
+        
+        <div v-if="shippingInfo" class="logistics-info">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="物流公司" label-width="80px" width="200px">
+              {{ shippingInfo.shippingCompany }}
+            </el-descriptions-item>
+            <el-descriptions-item label="物流单号" label-width="80px">
+              {{ shippingInfo.trackingNumber }}
+            </el-descriptions-item>
+            <el-descriptions-item label="发货地址" label-width="80px" :span="2">
+              {{ shippingInfo.senderAddress }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预计送达" label-width="80px" :span="2">
+              {{ shippingInfo.estimatedTime }}
+            </el-descriptions-item>
+          </el-descriptions>
+          
+          <div class="logistics-actions">
+            <el-button type="primary" @click="viewShippingRoute">查看物流路线</el-button>
+          </div>
+        </div>
+        <div v-else class="no-logistics">
+          <el-empty description="暂无物流信息" />
+        </div>
+      </el-card>
+      
       <!-- 商品信息 -->
       <el-card class="goods-card">
         <template #header>
@@ -164,9 +197,9 @@
         <div class="pay-type">
           <p class="pay-type-title">选择支付方式：</p>
           <el-radio-group v-model="payType">
-            <el-radio :label="1">支付宝</el-radio>
-            <el-radio :label="2">微信支付</el-radio>
-            <el-radio :label="3">银行卡</el-radio>
+            <el-radio :label="1" :value="1">支付宝</el-radio>
+            <el-radio :label="2" :value="2">微信支付</el-radio>
+            <el-radio :label="3" :value="3">银行卡</el-radio>
           </el-radio-group>
         </div>
       </div>
@@ -181,8 +214,66 @@
       </template>
     </el-dialog>
     
-    <!-- 支付宝支付表单容器 (隐藏) -->
-    <div ref="alipayFormContainer" style="display: none;"></div>
+    <!-- 物流路线弹窗 -->
+    <el-dialog
+      v-model="routeDialogVisible"
+      title="物流路线"
+      width="80%"
+      destroy-on-close
+    >
+      <div v-if="routeInfo" class="route-info">
+        <div class="route-header">
+          <div class="detail-sections">
+            <div class="detail-section">
+              <div class="info-item">
+                <span class="label">物流公司:</span>
+                <span>{{ routeInfo.shippingInfo.shippingCompany }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">物流单号:</span>
+                <span>{{ routeInfo.shippingInfo.trackingNumber }}</span>
+              </div>
+            </div>
+            <div class="detail-section">
+              <div class="info-item">
+                <span class="label">发货地址:</span>
+                <span>{{ routeInfo.shippingInfo.senderAddress }}</span>
+              </div>
+              <div class="info-item">
+                <span class="label">收货地址:</span>
+                <span>{{ routeInfo.shippingInfo.receiverAddress }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 物流路线图 -->
+        <div class="route-map">
+          <div class="map-placeholder">
+            <el-empty description="物流路线地图加载中..." v-if="!routeLoaded" />
+            <div id="route-map-container" style="height: 400px; width: 100%;" v-else></div>
+          </div>
+        </div>
+        
+        <!-- 物流路径点 -->
+        <div class="route-path-points">
+          <h4>物流轨迹</h4>
+          <el-timeline>
+            <el-timeline-item
+              v-for="(point, index) in routeInfo.pathPoints"
+              :key="index"
+              :timestamp="point.time"
+              :type="getPointStatusType(point.status)"
+            >
+              {{ getPointStatusText(point.status) }}
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </div>
+      <div v-else>
+        <el-empty description="暂无物流路线信息" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -190,7 +281,14 @@
 import { ref, onMounted, watch, defineProps } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getOrderDetail, cancelOrder as apiCancelOrder, payOrder as apiPayOrder, deleteOrder as apiDeleteOrder, confirmReceipt as apiConfirmReceipt, alipayOrder } from '../api/order'
+import { 
+  getOrderDetail, 
+  cancelOrder as apiCancelOrder, 
+  payOrder as apiPayOrder, 
+  deleteOrder as apiDeleteOrder, 
+  confirmReceipt as apiConfirmReceipt, 
+  getShippingRoute 
+} from '../api/order'
 
 // 接收props
 const props = defineProps({
@@ -213,6 +311,12 @@ const loading = ref(true)
 const payDialogVisible = ref(false)
 const payType = ref(1)
 const payLoading = ref(false)
+
+// 物流相关数据
+const shippingInfo = ref(null)
+const routeDialogVisible = ref(false)
+const routeInfo = ref(null)
+const routeLoaded = ref(false)
 
 // 先定义fetchOrderDetail函数
 const fetchOrderDetail = async () => {
@@ -271,6 +375,9 @@ const fetchOrderDetail = async () => {
       
       orderInfo.value = orderData;
       console.log('处理后的订单详情数据:', orderInfo.value);
+      
+      // 获取物流信息
+      fetchShippingInfo();
       
       // 添加更详细的调试信息
       console.log('订单状态值:', orderInfo.value.status);
@@ -410,72 +517,16 @@ const confirmPay = async () => {
   
   payLoading.value = true
   try {
-    // 如果是支付宝支付，使用新的支付宝接口
-    if (payType.value === 1) {
-      const res = await alipayOrder(getOrderId())
-      if (res.success) {
-        // 关闭支付对话框
-        payDialogVisible.value = false
-        
-        // 创建一个div来渲染支付表单
-        const alipayFormContainer = document.querySelector('#alipayFormContainer') || document.createElement('div')
-        alipayFormContainer.id = 'alipayFormContainer'
-        alipayFormContainer.innerHTML = res.data
-        document.body.appendChild(alipayFormContainer)
-        
-        // 手动提取表单action和参数，创建新表单并提交
-        try {
-          const formElement = alipayFormContainer.querySelector('form')
-          if (formElement) {
-            const action = formElement.getAttribute('action')
-            
-            // 获取所有表单输入字段
-            const inputs = formElement.querySelectorAll('input')
-            
-            // 创建新表单并提交
-            const newForm = document.createElement('form')
-            newForm.method = 'POST'
-            newForm.action = action.trim() // 确保去除可能的前后空格
-            newForm.target = '_self' // 在当前窗口打开
-            
-            // 添加所有原始表单参数
-            inputs.forEach(input => {
-              const newInput = document.createElement('input')
-              newInput.type = 'hidden'
-              newInput.name = input.name
-              newInput.value = input.value
-              newForm.appendChild(newInput)
-            })
-            
-            // 添加到body并提交
-            document.body.appendChild(newForm)
-            console.log('提交支付表单到:', action)
-            
-            // 确保表单提交
-            setTimeout(() => {
-              newForm.submit()
-              console.log('表单已提交')
-            }, 100)
-          } else {
-            console.error('未找到支付表单元素')
-            ElMessage.error('支付跳转失败，请稍后重试')
-          }
-        } catch (err) {
-          console.error('提交支付表单失败:', err)
-          ElMessage.error('支付跳转失败，请稍后重试')
-        }
-        
-        // 注意：支付成功后，支付宝会跳转回系统配置的returnUrl
-        // 前端需要在returnUrl页面处理订单状态的展示
-      } else {
-        ElMessage.error(res.message || '获取支付表单失败')
-      }
-    } else {
-      // 其他支付方式仍使用原来的接口
-      await apiPayOrder(getOrderId(), payType.value)
+    // 使用统一的支付接口，不再区分支付宝和其他支付方式
+    const res = await apiPayOrder(getOrderId(), payType.value)
+    
+    if (res.code === 200) {
       ElMessage.success('支付成功')
       payDialogVisible.value = false
+      // 刷新订单详情
       fetchOrderDetail()
+    } else {
+      ElMessage.error(res.message || '支付失败，请稍后重试')
     }
   } catch (error) {
     console.error('支付失败:', error)
@@ -546,6 +597,194 @@ const deleteOrder = () => {
       console.error('删除订单失败:', error)
     }
   }).catch(() => {})
+}
+
+// 获取物流信息
+const fetchShippingInfo = async () => {
+  if (orderInfo.value && orderInfo.value.status >= 2) {
+    try {
+      const res = await getShippingRoute(getOrderId())
+      if (res.code === 200 && res.data) {
+        shippingInfo.value = res.data.shippingInfo
+      }
+    } catch (error) {
+      console.error('获取物流信息失败:', error)
+    }
+  }
+}
+
+// 查看物流路线
+const viewShippingRoute = async () => {
+  try {
+    const res = await getShippingRoute(getOrderId())
+    
+    if (res.code === 200 && res.data) {
+      routeInfo.value = res.data
+      routeDialogVisible.value = true
+      
+      // 延迟加载地图
+      setTimeout(() => {
+        loadRouteMap()
+      }, 500)
+    } else {
+      ElMessage.error(res.message || '获取物流路线失败')
+    }
+  } catch (error) {
+    console.error('获取物流路线失败:', error)
+    ElMessage.error('获取物流路线失败')
+  }
+}
+
+// 加载物流路线地图
+const loadRouteMap = () => {
+  if (!routeInfo.value) return;
+  
+  routeLoaded.value = true;
+  
+  try {
+    // 获取坐标
+    const senderLng = parseFloat(routeInfo.value.senderLocation.longitude);
+    const senderLat = parseFloat(routeInfo.value.senderLocation.latitude);
+    const receiverLng = parseFloat(routeInfo.value.receiverLocation.longitude);
+    const receiverLat = parseFloat(routeInfo.value.receiverLocation.latitude);
+    
+    // 确保坐标有效
+    if (isNaN(senderLng) || isNaN(senderLat) || isNaN(receiverLng) || isNaN(receiverLat)) {
+      ElMessage.warning('物流坐标数据格式错误，无法显示地图');
+      return;
+    }
+    
+    // 延迟执行，确保DOM已经完全渲染
+    setTimeout(() => {
+      // 准备地图容器
+      const mapContainer = document.getElementById('route-map-container');
+      if (!mapContainer) {
+        console.error('找不到地图容器');
+        return;
+      }
+      
+      // 确保容器有尺寸
+      if (mapContainer.offsetWidth === 0 || mapContainer.offsetHeight === 0) {
+        mapContainer.style.width = '100%';
+        mapContainer.style.height = '400px';
+        mapContainer.style.display = 'block';
+      }
+      
+      // 清空容器
+      mapContainer.innerHTML = '';
+      
+      // 加载高德地图API
+      if (!window.AMap) {
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.src = 'https://webapi.amap.com/maps?v=2.0&key=017045315860ec69975d7a0a49f15511';
+        script.onload = () => initMap(senderLng, senderLat, receiverLng, receiverLat);
+        script.onerror = () => ElMessage.error('地图加载失败');
+        document.head.appendChild(script);
+      } else {
+        initMap(senderLng, senderLat, receiverLng, receiverLat);
+      }
+    }, 1000);
+  } catch (error) {
+    console.error('加载地图失败:', error);
+    ElMessage.warning('地图加载失败，但您仍可以查看物流信息');
+  }
+}
+
+// 初始化地图
+const initMap = (senderLng, senderLat, receiverLng, receiverLat) => {
+  try {
+    // 创建地图实例
+    const map = new window.AMap.Map('route-map-container', {
+      zoom: 8,
+      center: [(senderLng + receiverLng) / 2, (senderLat + receiverLat) / 2],
+      resizeEnable: true
+    });
+    
+    // 添加起点和终点标记
+    const startMarker = new window.AMap.Marker({
+      position: [senderLng, senderLat],
+      title: '发货地',
+      label: { content: '发货地', direction: 'right' }
+    });
+    
+    const endMarker = new window.AMap.Marker({
+      position: [receiverLng, receiverLat],
+      title: '收货地',
+      label: { content: '收货地', direction: 'right' }
+    });
+    
+    map.add([startMarker, endMarker]);
+    
+    // 添加信息窗体
+    startMarker.on('click', () => {
+      new window.AMap.InfoWindow({
+        content: `<div style="padding:10px;"><h4>发货地</h4><p>${routeInfo.value.shippingInfo.senderAddress}</p></div>`,
+        offset: new window.AMap.Pixel(0, -30)
+      }).open(map, startMarker.getPosition());
+    });
+    
+    endMarker.on('click', () => {
+      new window.AMap.InfoWindow({
+        content: `<div style="padding:10px;"><h4>收货地</h4><p>${routeInfo.value.shippingInfo.receiverAddress}</p></div>`,
+        offset: new window.AMap.Pixel(0, -30)
+      }).open(map, endMarker.getPosition());
+    });
+    
+    // 绘制直线连接起点和终点
+    const polyline = new window.AMap.Polyline({
+      path: [[senderLng, senderLat], [receiverLng, receiverLat]],
+      strokeColor: '#3498db',
+      strokeWeight: 6,
+      strokeOpacity: 0.8,
+      showDir: true,
+      lineJoin: 'round'
+    });
+    
+    map.add(polyline);
+    
+    // 计算两点之间的距离并显示
+    const distance = window.AMap.GeometryUtil.distance([senderLng, senderLat], [receiverLng, receiverLat]);
+    const distanceText = distance > 1000 ? `约 ${(distance / 1000).toFixed(1)} 公里` : `约 ${Math.round(distance)} 米`;
+    
+    // 在路线中间添加距离标签
+    const midPoint = [(senderLng + receiverLng) / 2, (senderLat + receiverLat) / 2];
+    const distanceMarker = new window.AMap.Marker({
+      position: midPoint,
+      content: `<div style="background-color: white; padding: 5px 10px; border-radius: 15px; border: 1px solid #3498db; font-size: 12px;">
+        <span>${distanceText}</span>
+      </div>`,
+      offset: new window.AMap.Pixel(0, -10),
+      anchor: 'bottom-center'
+    });
+    
+    map.add(distanceMarker);
+    map.setFitView();
+    
+  } catch (error) {
+    console.error('初始化地图失败:', error);
+    ElMessage.error('地图初始化失败');
+  }
+}
+
+// 获取物流节点状态类型
+const getPointStatusType = (status) => {
+  const types = {
+    1: 'primary',   // 已发货
+    2: 'warning',   // 运输中
+    3: 'success'    // 已送达
+  }
+  return types[status] || 'info'
+}
+
+// 获取物流节点状态文本
+const getPointStatusText = (status) => {
+  const texts = {
+    1: '已从仓库发出',
+    2: '运输中',
+    3: '已送达'
+  }
+  return texts[status] || '未知状态'
 }
 </script>
 
@@ -699,5 +938,86 @@ const deleteOrder = () => {
   display: flex;
   gap: 10px;
   justify-content: center;
+}
+
+.logistics-info {
+  margin-bottom: 20px;
+}
+
+.logistics-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.no-logistics {
+  padding: 20px 0;
+}
+
+.route-info {
+  padding: 0;
+}
+
+.route-header {
+  margin-bottom: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 15px;
+  border: 1px solid #ebeef5;
+}
+
+.detail-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+
+.detail-section {
+  flex: 1;
+  min-width: 250px;
+}
+
+.info-item {
+  margin-bottom: 8px;
+  display: flex;
+}
+
+.info-item .label {
+  width: 80px;
+  color: #666;
+}
+
+.route-map {
+  height: 400px;
+  margin-bottom: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.map-placeholder {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f5f7fa;
+}
+
+.route-path-points {
+  margin-top: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 15px;
+  border: 1px solid #ebeef5;
+}
+
+.route-path-points h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+  border-bottom: 1px solid #ebeef5;
+  padding-bottom: 10px;
 }
 </style>

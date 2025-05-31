@@ -590,13 +590,9 @@ const checkUserReviewed = async () => {
   if (!userStore.isLoggedIn) return
 
   try {
-    console.log('开始检查用户是否已评价商品:', goodsId)
-    
     // 获取用户订单列表
     const res = await getUserOrders()
-    console.log('用户订单API响应:', res)
     
-    // 处理分页数据结构，订单数组在res.data.list中
     let orderList = []
     if (res.data && Array.isArray(res.data.list)) {
       orderList = res.data.list
@@ -605,8 +601,6 @@ const checkUserReviewed = async () => {
     } else {
       console.warn('订单数据格式异常:', res.data)
     }
-    
-    console.log('获取到用户订单列表:', orderList.length, '条订单')
     
     // 过滤出包含当前商品的订单
     const relevantOrders = orderList.filter(order => {
@@ -619,22 +613,14 @@ const checkUserReviewed = async () => {
       const hasItem = order.orderItems.some(item => {
         const itemGoodsId = Number(item.goodsId)
         const currentGoodsId = Number(goodsId)
-        const matches = itemGoodsId === currentGoodsId
-        console.log(`订单${order.id}中商品${itemGoodsId}与当前商品${currentGoodsId}${matches ? '匹配' : '不匹配'}`)
-        return matches
+        return itemGoodsId === currentGoodsId
       })
       
-      if (hasItem) {
-        console.log('找到包含商品', goodsId, '的订单:', order.id)
-      }
       return hasItem
     })
     
-    console.log('包含当前商品的订单数量:', relevantOrders.length)
-    
     if (relevantOrders.length === 0) {
       // 没有相关订单，不需要继续检查
-      console.log('没有找到包含此商品的订单，无需评价')
       hasReviewed.value = false
       return
     }
@@ -644,16 +630,14 @@ const checkUserReviewed = async () => {
     
     for (const order of relevantOrders) {
       try {
-        console.log('检查订单', order.id, '商品', goodsId, '的评价状态')
         const checkResult = await checkReviewed(Number(goodsId), order.id)
-        console.log('检查结果:', JSON.stringify(checkResult))
         
         // 检查响应格式
         if (typeof checkResult === 'object') {
           if (checkResult.success === true && checkResult.data === true) {
-            console.log('订单', order.id, '已评价')
+            // 已评价
           } else {
-            console.log('订单', order.id, '未评价，响应数据:', checkResult.data)
+            // 未评价
             allReviewed = false
             break
           }
@@ -669,7 +653,6 @@ const checkUserReviewed = async () => {
       }
     }
     
-    console.log('最终评价状态:', allReviewed ? '已全部评价' : '未全部评价')
     hasReviewed.value = allReviewed
   } catch (error) {
     console.error('检查用户评价状态失败:', error)
