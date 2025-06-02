@@ -30,6 +30,11 @@
           </el-badge>
         </a>
         <a href="javascript:void(0)" @click="navigateTo('/orders')" class="nav-item">我的订单</a>
+        <a href="javascript:void(0)" @click="navigateTo('/chat')" class="nav-item">
+          <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
+            <el-icon><ChatDotRound /></el-icon> 在线客服
+          </el-badge>
+        </a>
         
         <template v-if="userStore.isLoggedIn">
           <el-dropdown trigger="click">
@@ -60,31 +65,200 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { Search, ShoppingCart, ArrowDown } from '@element-plus/icons-vue'
+import { ref, onMounted, watch, onBeforeUnmount, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Search, ShoppingCart, ArrowDown, ChatDotRound } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useUserStore } from '../store/user'
 import { useCartStore } from '../store/cart'
+import { getUnreadCount } from '../api/chat'
+import { useRequestCancellation } from '../hooks/useRequestCancellation'
+import { axios } from '../plugins/axios'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const cartStore = useCartStore()
 const keyword = ref('')
+const unreadCount = ref(0)
+const lastFetchTime = ref(0)
+let unreadCountTimer = null
+
+// 使用请求取消钩子
+const { createRequestConfig, cancelAllRequests, isRequestCancelled } = useRequestCancellation()
+
+// 当前用户信息
+const currentUser = computed(() => {
+  return JSON.parse(localStorage.getItem('userInfo') || '{}')
+})
+
+// 是否在聊天页面
+const isInChatPage = computed(() => {
+  return route.path === '/chat'
+})
 
 onMounted(() => {
   if (userStore.isLoggedIn) {
     loadCart()
+    // 初始获取一次未读消息数量
+    fetchUnreadCount()
   }
+  
+  // 监听路由变化
+  router.afterEach((to, from) => {
+    // 如果从聊天页面离开，停止轮询
+    if (from.path === '/chat' && to.path !== '/chat') {
+      stopUnreadCountTimer()
+    }
+    // 如果进入聊天页面，停止轮询（由聊天页面自己负责更新）
+    else if (to.path === '/chat') {
+      stopUnreadCountTimer()
+    }
+    // 如果不在聊天页面，但需要显示未读消息数，启动轮询
+    else if (to.path !== '/chat' && userStore.isLoggedIn) {
+      startUnreadCountTimer()
+    }
+  })
+
+  // 监听页面可见性变化
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
-// 监听用户登录状态变化，重新加载购物车
+// 监听用户登录状态变化，重新加载购物车和未读消息
 watch(() => userStore.isLoggedIn, (newValue) => {
   if (newValue) {
     loadCart()
+    fetchUnreadCount()
+    
+    // 如果不在聊天页面，启动轮询
+    if (!isInChatPage.value) {
+      startUnreadCountTimer()
+    }
   } else {
     cartStore.cartItems = []
+    unreadCount.value = 0
+    stopUnreadCountTimer()
   }
+})
+
+// 获取未读消息数量
+const fetchUnreadCount = async () => {
+  // 如果用户未登录，直接返回
+  if (!currentUser.value.id) {
+    return
+  }
+  
+  // 如果在聊天页面，不需要获取未读消息数量
+  if (isInChatPage.value) {
+    return
+  }
+  
+  // 检查是否需要节流（5秒内不重复请求）
+  const now = Date.now()
+  if (now - lastFetchTime.value < 5000) {
+    console.log('获取未读消息数量过于频繁，跳过请求')
+    return
+  }
+  
+  try {
+    lastFetchTime.value = now
+    const result = await axios.get(`/chat/unread/${currentUser.value.id}`, {
+      ...createRequestConfig('HEADER_UNREAD_COUNT')
+    })
+    
+    if (result.data.success) {
+      // 计算总未读消息数量
+      let total = 0
+      if (result.data.data) {
+        Object.values(result.data.data).forEach(count => {
+          total += count
+        })
+      }
+      unreadCount.value = total
+    }
+  } catch (error) {
+    if (!isRequestCancelled(error)) {
+      console.error('获取未读消息数量失败:', error)
+    }
+  }
+}
+
+// 开始未读消息数量定时器
+const startUnreadCountTimer = () => {
+  // 先清除可能存在的定时器
+  stopUnreadCountTimer()
+  
+  // 如果用户未登录，不启动定时器
+  if (!currentUser.value.id) {
+    return
+  }
+  
+  // 如果在聊天页面，不启动定时器
+  if (isInChatPage.value) {
+    return
+  }
+  
+  // 立即获取一次
+  fetchUnreadCount()
+  
+  // 每60秒获取一次
+  unreadCountTimer = setInterval(() => {
+    // 只有页面可见时才获取
+    if (document.visibilityState === 'visible') {
+      fetchUnreadCount()
+    }
+  }, 60000)
+}
+
+// 停止未读消息数量定时器
+const stopUnreadCountTimer = () => {
+  if (unreadCountTimer) {
+    clearInterval(unreadCountTimer)
+    unreadCountTimer = null
+  }
+  
+  // 取消正在进行的请求
+  cancelAllRequests()
+}
+
+// 处理页面可见性变化
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    // 页面变为可见时，获取未读消息数量
+    fetchUnreadCount()
+  } else {
+    // 页面不可见时，取消所有请求
+    cancelAllRequests()
+  }
+}
+
+// 监听路由变化
+watch(() => route.path, (newPath) => {
+  if (newPath === '/chat') {
+    // 进入聊天页面，停止定时器
+    stopUnreadCountTimer()
+  } else {
+    // 离开聊天页面，启动定时器
+    startUnreadCountTimer()
+  }
+})
+
+// 监听用户登录状态变化
+watch(() => currentUser.value.id, (newUserId) => {
+  if (newUserId) {
+    // 用户登录，启动定时器
+    startUnreadCountTimer()
+  } else {
+    // 用户登出，停止定时器
+    stopUnreadCountTimer()
+  }
+})
+
+// 组件卸载前清除定时器
+onBeforeUnmount(() => {
+  stopUnreadCountTimer()
+  // 移除页面可见性变化监听器
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 // 通用导航函数

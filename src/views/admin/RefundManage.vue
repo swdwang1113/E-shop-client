@@ -6,8 +6,8 @@
     
     <div class="filter-bar">
       <el-form :inline="true" class="filter-form">
-        <el-form-item label="订单号">
-          <el-input v-model="filterOrderNo" placeholder="请输入订单号" clearable @clear="handleSearch" />
+        <el-form-item label="订单ID">
+          <el-input v-model="filterOrderId" placeholder="请输入订单ID" clearable @clear="handleSearch" />
         </el-form-item>
         
         <el-form-item label="状态">
@@ -29,8 +29,8 @@
     <div class="refund-table-wrapper" v-loading="loading">
       <el-table :data="refundList" border stripe style="width: 100%">
         <el-table-column prop="id" label="退款ID" width="80" />
-        <el-table-column prop="orderNo" label="订单号" width="180" />
-        <el-table-column prop="username" label="用户" width="120" />
+        <el-table-column prop="orderId" label="订单ID" width="180" />
+        <el-table-column prop="userId" label="用户ID" width="120" />
         
         <el-table-column label="退款金额" width="120">
           <template #default="scope">
@@ -118,15 +118,15 @@
             </div>
             <div class="detail-item">
               <span class="label">订单编号:</span>
-              <span class="value">{{ currentRefund.orderNo }}</span>
+              <span class="value">{{ currentRefund.orderId }}</span>
             </div>
             <div class="detail-item">
               <span class="label">退款金额:</span>
               <span class="value price">¥{{ currentRefund.refundAmount.toFixed(2) }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">用户名:</span>
-              <span class="value">{{ currentRefund.username }}</span>
+              <span class="label">用户ID:</span>
+              <span class="value">{{ currentRefund.userId }}</span>
             </div>
             <div class="detail-item">
               <span class="label">申请时间:</span>
@@ -226,7 +226,7 @@ const pageSize = ref(10)
 
 // 筛选条件
 const filterStatus = ref('')
-const filterOrderNo = ref('')
+const filterOrderId = ref('')
 
 // 详情对话框相关
 const detailDialogVisible = ref(false)
@@ -253,7 +253,7 @@ const fetchRefundList = async () => {
     pageNum: currentPage.value,
     pageSize: pageSize.value,
     status: filterStatus.value !== '' ? filterStatus.value : undefined,
-    orderNo: filterOrderNo.value.trim() || undefined
+    orderId: filterOrderId.value.trim() || undefined
   }
   console.log('请求参数:', params)
   
@@ -306,8 +306,8 @@ const useMockData = () => {
   refundList.value = [
     {
       id: 1,
-      orderNo: 'O202310190001',
-      username: '张三',
+      orderId: 101,
+      userId: 201,
       refundAmount: 199.99,
       reason: '商品质量问题',
       status: 0,
@@ -317,8 +317,8 @@ const useMockData = () => {
     },
     {
       id: 2,
-      orderNo: 'O202310190002',
-      username: '李四',
+      orderId: 102,
+      userId: 202,
       refundAmount: 99.99,
       reason: '订单错误',
       status: 1,
@@ -329,8 +329,8 @@ const useMockData = () => {
     },
     {
       id: 3,
-      orderNo: 'O202310190003',
-      username: '王五',
+      orderId: 103,
+      userId: 203,
       refundAmount: 299.99,
       reason: '物流太慢',
       status: 2,
@@ -403,7 +403,7 @@ const handleSearch = () => {
 // 重置筛选条件
 const resetFilter = () => {
   filterStatus.value = ''
-  filterOrderNo.value = ''
+  filterOrderId.value = ''
   currentPage.value = 1
   fetchRefundList()
 }

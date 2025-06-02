@@ -74,6 +74,10 @@ service.interceptors.request.use(
     // 记录请求
     ApiDebug.logRequest(config)
     
+    // 打印完整请求URL
+    console.log('完整请求URL:', `${config.baseURL || ''}${config.url}`)
+    console.log('请求头:', config.headers)
+    
     // 从localStorage获取token
     const token = localStorage.getItem('token')
     

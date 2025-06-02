@@ -36,6 +36,11 @@
             <span>退款管理</span>
           </el-menu-item>
           
+          <el-menu-item index="/admin/chat">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>在线客服</span>
+          </el-menu-item>
+          
           <el-menu-item index="/admin/categories">
             <el-icon><IconMenu /></el-icon>
             <span>分类管理</span>
@@ -120,7 +125,8 @@ import {
   Fold, 
   Expand, 
   ArrowDown,
-  RefreshRight
+  RefreshRight,
+  ChatDotRound
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 
@@ -162,7 +168,8 @@ const breadcrumbs = computed(() => {
       'orders': '订单管理',
       'users': '用户管理',
       'categories': '分类管理',
-      'refunds': '退款管理'
+      'refunds': '退款管理',
+      'chat': '在线客服'
     }
     
     if (translations[lastPart]) {

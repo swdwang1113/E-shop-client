@@ -70,6 +70,14 @@ const routes = [
         meta: { 
           keepAlive: false
         }
+      },
+      {
+        path: '/chat',
+        name: 'Chat',
+        component: () => import('../views/Chat.vue'),
+        meta: { 
+          keepAlive: false
+        }
       }
     ]
   },
@@ -117,6 +125,11 @@ const routes = [
         path: 'refunds',
         name: 'RefundManage',
         component: () => import('../views/admin/RefundManage.vue')
+      },
+      {
+        path: 'chat',
+        name: 'AdminChat',
+        component: () => import('../views/admin/AdminChat.vue')
       }
       // 物流路线页面已被后端移除，现在在订单管理中直接查看物流
     ]
@@ -155,7 +168,7 @@ router.beforeEach((to, from, next) => {
     }
   } 
   // 需要登录的路由
-  else if (to.path.startsWith('/orders') || to.path === '/cart' || to.path === '/checkout' || to.path === '/user' || to.path === '/refunds') {
+  else if (to.path.startsWith('/orders') || to.path === '/cart' || to.path === '/checkout' || to.path === '/user' || to.path === '/refunds' || to.path === '/chat') {
     if (token) {
       next()
     } else {
