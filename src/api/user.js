@@ -15,6 +15,24 @@ export function getCaptcha() {
   })
 }
 
+// 发送邮箱验证码
+export function sendEmailCode(email) {
+  return request({
+    url: '/api/email/code/send',
+    method: 'post',
+    data: { email }
+  })
+}
+
+// 邮箱验证码登录
+export function emailLogin(data) {
+  return request({
+    url: '/api/email/login',
+    method: 'post',
+    data
+  })
+}
+
 // 用户注册
 export function register(data) {
   return request({

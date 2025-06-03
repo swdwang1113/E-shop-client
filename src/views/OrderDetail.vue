@@ -339,6 +339,7 @@ import {
   getShippingRoute 
 } from '../api/order'
 import { applyRefund } from '../api/refund'
+import request from '../api/index'
 
 // 接收props
 const props = defineProps({
@@ -383,17 +384,13 @@ const fetchOrderDetail = async () => {
   orderInfo.value = {} // 清空之前的数据
   
   const orderId = getOrderId()
-  console.log('开始获取订单详情，ID:', orderId)
   
   try {
-    console.log('调用API前，请求参数:', orderId)
     const res = await getOrderDetail(orderId)
-    console.log('获取订单详情响应原始数据:', JSON.stringify(res))
     
     if (res && res.data) {
       // 深拷贝防止影响原始数据
       const orderData = JSON.parse(JSON.stringify(res.data));
-      console.log('处理前的订单数据:', orderData);
       
       // 检查并规范化订单项数据
       if (orderData.orderItems) {
@@ -432,19 +429,10 @@ const fetchOrderDetail = async () => {
       }
       
       orderInfo.value = orderData;
-      console.log('处理后的订单详情数据:', orderInfo.value);
       
       // 获取物流信息
       fetchShippingInfo();
-      
-      // 添加更详细的调试信息
-      console.log('订单状态值:', orderInfo.value.status);
-      console.log('订单状态值类型:', typeof orderInfo.value.status);
-      console.log('订单状态文本:', getStatusText(orderInfo.value.status));
-      console.log('是否显示去评价按钮条件1 (status === 3):', orderInfo.value.status === 3);
-      console.log('是否显示去评价按钮条件2 (getStatusText === 已完成):', getStatusText(orderInfo.value.status) === '已完成');
     } else {
-      console.error('获取订单详情失败: 没有数据');
       ElMessage.error('获取订单数据失败');
       orderInfo.value = {};
     }
@@ -458,11 +446,8 @@ const fetchOrderDetail = async () => {
 }
 
 onMounted(() => {
-  console.log('OrderDetail组件已挂载，路由参数:', route.params)
-  
   // 发送API请求获取最新数据
   if (getOrderId()) {
-    console.log('组件挂载时立即请求数据')
     fetchOrderDetail()
     
     // 检查URL参数，如果有retry=payment，则自动打开支付对话框
@@ -476,9 +461,7 @@ onMounted(() => {
 
 // 监听路由参数变化，使用immediate: true确保首次加载时也会触发
 watch([() => getOrderId()], ([newId], [oldId]) => {
-  console.log('路由参数变化:', { newId, oldId })
   if (newId && newId !== oldId) {
-    console.log('路由ID变化，重新请求数据')
     fetchOrderDetail()
   }
 }, { immediate: true })
@@ -573,9 +556,41 @@ const payOrder = () => {
 const confirmPay = async () => {
   if (!payType.value) return
   
-  payLoading.value = true
   try {
-    // 使用统一的支付接口，不再区分支付宝和其他支付方式
+    payLoading.value = true
+    
+    // 支付宝支付需要特殊处理
+    if (payType.value === 1) {
+      // 使用axios请求而不是直接跳转，确保携带token
+      const res = await request({
+        url: `/api/orders/${getOrderId()}/pay`,
+        method: 'post',
+        params: { paymentType: 1 },
+        responseType: 'text'  // 确保返回文本而非JSON
+      })
+      
+      if (res && res.data) {
+        // 创建一个隐藏的div来放置表单
+        const div = document.createElement('div')
+        div.innerHTML = res.data
+        document.body.appendChild(div)
+        
+        // 获取表单并提交
+        const form = div.getElementsByTagName('form')[0]
+        if (form) {
+          form.submit()
+        } else {
+          ElMessage.error('支付表单生成失败')
+          payLoading.value = false
+        }
+      } else {
+        ElMessage.error('获取支付表单失败')
+        payLoading.value = false
+      }
+      return
+    }
+    
+    // 其他支付方式走正常API调用流程
     const res = await apiPayOrder(getOrderId(), payType.value)
     
     if (res.code === 200) {

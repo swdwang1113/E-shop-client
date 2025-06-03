@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { login, getUserInfo, updateUserInfo, uploadAvatar } from '../api/user'
+import { login, getUserInfo, updateUserInfo, uploadAvatar, emailLogin } from '../api/user'
 import { getUserAddresses, addAddress, updateAddress, deleteAddress, setDefaultAddress } from '../api/address'
 import { ElMessage } from 'element-plus'
 
@@ -54,6 +54,29 @@ export const useUserStore = defineStore('user', {
       } catch (error) {
         console.error('登录失败:', error)
         ElMessage.error(error.message || '登录失败，请检查用户名、密码和验证码')
+        throw error
+      }
+    },
+    
+    async emailLogin(loginData) {
+      try {
+        const res = await emailLogin(loginData)
+        
+        // 直接从data中获取token
+        const token = res.data?.token
+        
+        if (!token) {
+          ElMessage.error(res.message || '邮箱登录失败，未获取到token')
+          throw new Error(res.message || '未获取到token')
+        }
+        
+        this.token = token
+        localStorage.setItem('token', token)
+        
+        return res
+      } catch (error) {
+        console.error('邮箱登录失败:', error)
+        ElMessage.error(error.message || '邮箱登录失败，请检查邮箱和验证码')
         throw error
       }
     },

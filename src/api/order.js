@@ -126,3 +126,12 @@ export function getShippingRoute(orderId) {
     method: 'get'
   })
 }
+
+// 查询支付宝支付状态
+export function queryAlipayStatus(orderNo) {
+  return request({
+    url: '/api/alipay/query',
+    method: 'get',
+    params: { orderNo }
+  })
+}

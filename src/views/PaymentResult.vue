@@ -15,7 +15,7 @@
         </div>
         <div v-else class="failed-result">
           <el-icon class="result-icon failed"><CircleCloseFilled /></el-icon>
-          <h2>支付失败</h2>
+          <h2>{{ checkingPayment ? '支付确认中' : '支付失败' }}</h2>
           <p>{{ errorMessage || '支付过程中发生错误，请稍后重试' }}</p>
           <div class="action-buttons">
             <el-button type="primary" @click="retryPayment">重新支付</el-button>
@@ -28,22 +28,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import { getOrderByNo, getOrderDetail } from '../api/order'
+import { queryAlipayStatus } from '../api/order'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
 const paymentSuccess = ref(false)
+const checkingPayment = ref(false)
 const orderNo = ref('')
 const orderId = ref('')
 const amount = ref(0)
 const payTime = ref('')
 const errorMessage = ref('')
+let statusCheckTimer = null
+let maxCheckAttempts = 10
+let currentAttempt = 0
 
 onMounted(async () => {
   // 从URL参数中获取订单信息
@@ -71,37 +76,107 @@ onMounted(async () => {
       if (orderData.status >= 1) { // 状态大于等于1表示已支付
         paymentSuccess.value = true
         payTime.value = formatDateTime(orderData.payTime || new Date())
+        loading.value = false
       } else {
         // 如果订单状态仍为未支付，可能是支付宝回调尚未完成
-        // 在测试环境中，可能需要刷新订单状态
-        setTimeout(async () => {
-          try {
-            // 再次获取订单详情
-            const refreshRes = await getOrderDetail(orderData.id)
-            if (refreshRes.success && refreshRes.data && refreshRes.data.status >= 1) {
-              paymentSuccess.value = true
-              payTime.value = formatDateTime(refreshRes.data.payTime || new Date())
-            } else {
-              errorMessage.value = '支付结果确认中，请稍后查看订单状态'
-            }
-          } catch (err) {
-            console.error('刷新订单状态失败:', err)
-            errorMessage.value = '获取支付结果失败，请稍后查看订单状态'
-          }
-          loading.value = false
-        }, 2000) // 延迟2秒再次检查
-        return
+        // 开始定时查询支付状态
+        checkingPayment.value = true
+        errorMessage.value = '正在确认支付结果，请稍候...'
+        loading.value = false
+        startPaymentStatusCheck()
       }
     } else {
       errorMessage.value = '获取订单信息失败'
+      loading.value = false
     }
   } catch (error) {
     console.error('获取订单详情失败:', error)
     errorMessage.value = '获取订单信息失败'
+    loading.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  // 组件卸载前清除定时器
+  if (statusCheckTimer) {
+    clearInterval(statusCheckTimer)
+  }
+})
+
+// 定时查询支付状态
+const startPaymentStatusCheck = () => {
+  // 先立即查询一次
+  checkPaymentStatus()
+  
+  // 设置定时器，每3秒查询一次
+  statusCheckTimer = setInterval(() => {
+    checkPaymentStatus()
+  }, 3000)
+  
+  // 60秒后停止查询
+  setTimeout(() => {
+    if (statusCheckTimer) {
+      clearInterval(statusCheckTimer)
+      statusCheckTimer = null
+      
+      // 如果仍未确认支付成功，显示提示信息
+      if (!paymentSuccess.value) {
+        checkingPayment.value = false
+        errorMessage.value = '支付结果确认超时，请查看订单列表确认支付状态'
+      }
+    }
+  }, 60000)
+}
+
+// 查询支付状态
+const checkPaymentStatus = async () => {
+  currentAttempt++
+  
+  try {
+    // 先通过支付宝查询接口查询
+    const alipayRes = await queryAlipayStatus(orderNo.value)
+    if (alipayRes.success && alipayRes.data === true) {
+      // 支付宝查询显示已支付
+      handlePaymentSuccess()
+      return
+    }
+    
+    // 再查询订单详情
+    const orderRes = await getOrderDetail(orderId.value)
+    if (orderRes.success && orderRes.data && orderRes.data.status >= 1) {
+      // 订单状态显示已支付
+      handlePaymentSuccess(orderRes.data)
+      return
+    }
+    
+    // 如果达到最大尝试次数，停止查询
+    if (currentAttempt >= maxCheckAttempts) {
+      if (statusCheckTimer) {
+        clearInterval(statusCheckTimer)
+        statusCheckTimer = null
+      }
+      checkingPayment.value = false
+      errorMessage.value = '支付结果确认超时，请查看订单列表确认支付状态'
+    }
+  } catch (error) {
+    console.error('查询支付状态失败:', error)
+    // 查询失败不停止定时器，继续尝试
+  }
+}
+
+// 处理支付成功
+const handlePaymentSuccess = (orderData) => {
+  // 清除定时器
+  if (statusCheckTimer) {
+    clearInterval(statusCheckTimer)
+    statusCheckTimer = null
   }
   
-  loading.value = false
-})
+  // 更新状态
+  paymentSuccess.value = true
+  checkingPayment.value = false
+  payTime.value = formatDateTime(orderData?.payTime || new Date())
+}
 
 const formatDateTime = (dateTimeStr) => {
   if (!dateTimeStr) return ''
