@@ -16,6 +16,21 @@ export function applyRefund(orderId, refundData) {
   })
 }
 
+// 上传退款凭证图片
+export function uploadRefundImage(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  return request({
+    url: '/api/refunds/upload/image',
+    method: 'post',
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
+
 // 获取退款详情
 export function getRefundDetail(refundId) {
   console.log('获取退款详情, ID:', refundId)

@@ -155,6 +155,21 @@
           </div>
         </div>
         
+        <!-- 添加退款凭证图片显示部分 -->
+        <div class="detail-section" v-if="currentRefund.images">
+          <h3>退款凭证</h3>
+          <div class="refund-images">
+            <el-image 
+              v-for="(image, index) in getImageList(currentRefund.images)" 
+              :key="index"
+              :src="image" 
+              :preview-src-list="getImageList(currentRefund.images)"
+              fit="cover"
+              class="refund-image"
+            />
+          </div>
+        </div>
+        
         <div class="detail-section" v-if="currentRefund.status !== 0">
           <h3>处理结果</h3>
           <div class="detail-item" v-if="currentRefund.updateTime">
@@ -455,6 +470,12 @@ const formatTime = (timeStr) => {
   
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
+
+// 将逗号分隔的图片URL转换为数组
+const getImageList = (imagesStr) => {
+  if (!imagesStr) return []
+  return imagesStr.split(',').filter(url => url.trim() !== '')
+}
 </script>
 
 <style scoped>
@@ -535,6 +556,21 @@ const formatTime = (timeStr) => {
   display: flex;
   justify-content: center;
   gap: 20px;
+}
+
+.refund-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.refund-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
+  border: 1px solid #EBEEF5;
+  cursor: pointer;
 }
 
 .process-tip {

@@ -250,6 +250,28 @@
               placeholder="请详细描述退款原因..."
             />
           </el-form-item>
+          
+          <el-form-item label="上传凭证">
+            <el-upload
+              class="refund-image-uploader"
+              action="#"
+              :http-request="uploadRefundImage"
+              :show-file-list="true"
+              :limit="3"
+              :file-list="refundImageList"
+              :on-exceed="handleExceed"
+              :on-remove="handleRemoveImage"
+              :before-upload="beforeUploadImage"
+              list-type="picture-card"
+            >
+              <el-icon><Plus /></el-icon>
+              <template #tip>
+                <div class="el-upload__tip">
+                  支持jpg、jpeg、png格式，最多3张图片
+                </div>
+              </template>
+            </el-upload>
+          </el-form-item>
         </el-form>
       </div>
       
@@ -339,7 +361,9 @@ import {
   getShippingRoute 
 } from '../api/order'
 import { applyRefund } from '../api/refund'
+import { uploadRefundImage as uploadRefundImageApi } from '../api/refund'
 import request from '../api/index'
+import { Plus } from '@element-plus/icons-vue'
 
 // 接收props
 const props = defineProps({
@@ -374,8 +398,11 @@ const refundDialogVisible = ref(false)
 const refundLoading = ref(false)
 const refundForm = ref({
   reason: '',
-  description: ''
+  description: '',
+  images: ''
 })
+const refundImageList = ref([])
+const uploadedImages = ref([])
 
 // 先定义fetchOrderDetail函数
 const fetchOrderDetail = async () => {
@@ -865,9 +892,64 @@ const showRefundDialog = () => {
   // 重置表单
   refundForm.value = {
     reason: '',
-    description: ''
+    description: '',
+    images: ''
   }
+  refundImageList.value = []
+  uploadedImages.value = []
   refundDialogVisible.value = true
+}
+
+// 处理图片上传前的验证
+const beforeUploadImage = (file) => {
+  const isJPG = file.type === 'image/jpeg'
+  const isPNG = file.type === 'image/png'
+  const isLt2M = file.size / 1024 / 1024 < 2
+
+  if (!isJPG && !isPNG) {
+    ElMessage.error('上传图片只能是 JPG/PNG 格式!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('上传图片大小不能超过 2MB!')
+    return false
+  }
+  return true
+}
+
+// 自定义上传方法
+const uploadRefundImage = async (options) => {
+  try {
+    const res = await uploadRefundImageApi(options.file)
+    if (res.success && res.data) {
+      uploadedImages.value.push(res.data)
+      // 更新表单中的图片URL字段
+      refundForm.value.images = uploadedImages.value.join(',')
+      ElMessage.success('图片上传成功')
+    } else {
+      ElMessage.error(res.message || '图片上传失败')
+    }
+  } catch (error) {
+    console.error('上传图片失败:', error)
+    ElMessage.error('图片上传失败')
+  }
+}
+
+// 处理超出上传数量限制
+const handleExceed = () => {
+  ElMessage.warning('最多只能上传3张图片')
+}
+
+// 处理移除图片
+const handleRemoveImage = (file) => {
+  // 找到被删除图片的URL并从uploadedImages中移除
+  const fileUrl = file.url || file.response
+  const index = uploadedImages.value.indexOf(fileUrl)
+  if (index !== -1) {
+    uploadedImages.value.splice(index, 1)
+    // 更新表单中的图片URL字段
+    refundForm.value.images = uploadedImages.value.join(',')
+  }
 }
 
 // 提交退款申请
