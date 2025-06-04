@@ -30,7 +30,7 @@
           <div class="refund-header">
             <div class="refund-info">
               <span class="refund-id">退款编号: {{ refund.id }}</span>
-              <span class="order-no">订单号: {{ refund.orderNo }}</span>
+              <span class="order-no">订单ID: {{ refund.orderId }}</span>
             </div>
             <div class="refund-status">
               <el-tag :type="getStatusType(refund.status)">{{ refund.statusText || getStatusText(refund.status) }}</el-tag>
@@ -114,8 +114,8 @@
             <span class="value">{{ currentRefund.id }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">订单编号:</span>
-            <span class="value">{{ currentRefund.orderNo }}</span>
+            <span class="label">订单ID:</span>
+            <span class="value">{{ currentRefund.orderId }}</span>
           </div>
           <div class="detail-item">
             <span class="label">退款金额:</span>
@@ -144,6 +144,21 @@
           <div class="detail-item" v-if="currentRefund.description">
             <span class="label">详细说明:</span>
             <span class="value">{{ currentRefund.description }}</span>
+          </div>
+        </div>
+        
+        <!-- 添加退款凭证图片显示部分 -->
+        <div class="detail-section" v-if="currentRefund.images">
+          <h3>退款凭证</h3>
+          <div class="refund-images">
+            <el-image 
+              v-for="(image, index) in getImageList(currentRefund.images)" 
+              :key="index"
+              :src="image" 
+              :preview-src-list="getImageList(currentRefund.images)"
+              fit="cover"
+              class="refund-image"
+            />
           </div>
         </div>
         
@@ -257,7 +272,7 @@ const viewRefundDetail = async (refundId) => {
 
 // 查看关联订单
 const viewOrder = (orderId) => {
-  router.push(`/order/${orderId}`)
+  router.push(`/orders/${orderId}`)
 }
 
 // 状态筛选变化
@@ -319,6 +334,12 @@ const formatTime = (timeStr) => {
   const seconds = String(date.getSeconds()).padStart(2, '0')
   
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+// 将逗号分隔的图片URL转换为数组
+const getImageList = (imagesStr) => {
+  if (!imagesStr) return []
+  return imagesStr.split(',').filter(url => url.trim() !== '')
 }
 </script>
 
@@ -436,5 +457,20 @@ const formatTime = (timeStr) => {
 
 .loading-container {
   padding: 20px;
+}
+
+.refund-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.refund-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
+  border: 1px solid #EBEEF5;
+  cursor: pointer;
 }
 </style> 

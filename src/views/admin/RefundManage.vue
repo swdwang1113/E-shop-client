@@ -117,7 +117,7 @@
               <span class="value">{{ currentRefund.id }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">订单编号:</span>
+              <span class="label">订单ID:</span>
               <span class="value">{{ currentRefund.orderId }}</span>
             </div>
             <div class="detail-item">
